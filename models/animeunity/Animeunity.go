@@ -1,8 +1,6 @@
 package animeunity
 
 import (
-	"anime_watcher/models"
-	"anime_watcher/models/httpclient"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -15,6 +13,8 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/IceWizard98/series_downloader/models"
+	"github.com/IceWizard98/series_downloader/models/httpclient"
 	"github.com/PuerkitoBio/goquery"
 )
 
@@ -165,7 +165,7 @@ func (a *animeUnity) GetEpisodes( animeModel models.Anime ) []models.Episode {
 			episode := models.Episode{
 				ID:          v.ID,
 				Number:      number,
-				EpisodeCode: string(v.EpisodeCode),
+				EpisodeCode: fmt.Sprintf("%d", v.EpisodeCode),
 			}
 
 			episodesList = append(episodesList, episode)
