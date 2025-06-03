@@ -1,9 +1,9 @@
 package main
 
 import (
-	"anime_watcher/models"
-	"anime_watcher/models/animeunity"
-  "anime_watcher/utils/routinepoll"
+	"github.com/IceWizard98/series_downloader/models"
+	"github.com/IceWizard98/series_downloader/models/animeunity"
+	"github.com/IceWizard98/series_downloader/utils/routinepoll"
 	"flag"
 	"strconv"
 	"unicode"
