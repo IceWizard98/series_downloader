@@ -7,6 +7,7 @@ import (
 
 	"github.com/IceWizard98/series_downloader/models"
 	"github.com/IceWizard98/series_downloader/models/animeunity"
+	"github.com/IceWizard98/series_downloader/models/user"
 	"github.com/IceWizard98/series_downloader/utils/routinepoll"
 	"github.com/skratchdot/open-golang/open"
 
@@ -41,10 +42,7 @@ func main() {
 		return
 	}
 
-	user := models.User{
-		RootDir: userRootDir,
-	}
-
+	user := user.GetInstance(*userName, userRootDir)
 
 	if *anime_title == "" || len(*anime_title) == 0 {
 		fmt.Println("Please provide an anime title")
