@@ -1,12 +1,14 @@
 package main
 
 import (
-	"github.com/IceWizard98/series_downloader/models"
-	"github.com/IceWizard98/series_downloader/models/animeunity"
-	"github.com/IceWizard98/series_downloader/utils/routinepoll"
 	"flag"
 	"strconv"
 	"unicode"
+
+	"github.com/IceWizard98/series_downloader/models"
+	"github.com/IceWizard98/series_downloader/models/animeunity"
+	"github.com/IceWizard98/series_downloader/utils/routinepoll"
+	"github.com/skratchdot/open-golang/open"
 
 	"bufio"
 	"fmt"
@@ -27,12 +29,16 @@ func main() {
 	fmt.Printf("Loading env file: %s\n", envFile)
 	if _, err := os.Stat(envFile); err == nil {
 		_ = godotenv.Load(envFile)
+	} else {
+		fmt.Printf("Env file not found: %s\n", envFile)
+		return
 	}
 
   userRootDir := os.Getenv("USER_ROOT_DIR")
 
 	if userRootDir == "" {
-		panic("USER_ROOT_DIR is not set")
+		fmt.Println("USER_ROOT_DIR is not set")
+		return
 	}
 
 	user := models.User{
@@ -94,8 +100,8 @@ func main() {
 			reader := bufio.NewReader(os.Stdin)
 
 			to_continue, _ := reader.ReadString('\n') 
-			to_continue    =  strings.TrimSpace(to_continue)
-			to_continue    =  strings.ToLower(to_continue)
+			to_continue     = strings.TrimSpace(to_continue)
+			to_continue     = strings.ToLower(to_continue)
 
 			if to_continue == "y" {
 				selectedEpisode = models.Episode{
@@ -164,7 +170,9 @@ func main() {
 	  	} else {
 	  		fmt.Printf("Episode downloaded: %d\n", episode.Number)
 	  		user.AddHistory( "animeunity", selectedAnime.ID, episode ) 
-	  		fmt.Printf("Play episode: %s\n", path)
+				if err := open.Run(path); err != nil {
+					fmt.Printf("Error opening file to Play episode %s: %s\n", path, err)
+				}
 	  	}
 	  }( selectedEpisode )
 	})
