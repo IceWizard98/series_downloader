@@ -54,9 +54,9 @@ func Init() *animeUnity {
 
 /*
 	Search for animes by title using the API endpoint
-  The result is a list of models.Anime
+  The result is a list of models.Serie
 */
-func (a animeUnity) Search( query string ) []models.Anime {
+func (a animeUnity) Search( query string ) []models.Serie {
 	search        := fmt.Sprintf(`{"title":"%s"}`, query)
 	response, err := a.Client.DoRequest("POST", "/livesearch", search)
 
@@ -81,9 +81,9 @@ func (a animeUnity) Search( query string ) []models.Anime {
 		panic(err)
 	}
 
-	var animeModels []models.Anime
+	var animeModels []models.Serie
 	for _, v := range animeList {
-		animeModels = append(animeModels, models.Anime{
+		animeModels = append(animeModels, models.Serie{
 			ID:       fmt.Sprintf("%d", v.ID),
 			Name:     v.Name,
 			ImageURL: v.ImageURL,
@@ -99,7 +99,7 @@ func (a animeUnity) Search( query string ) []models.Anime {
   Get the anime episodes using the API endpoint
 	The result is a list of models.Episode
 */
-func (a *animeUnity) GetEpisodes( animeModel models.Anime ) []models.Episode {
+func (a *animeUnity) GetEpisodes( animeModel models.Serie ) []models.Episode {
 	numberId, err := strconv.ParseUint(animeModel.ID, 10, 64); if err != nil {
 		panic(err)
 	}
