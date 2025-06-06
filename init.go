@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"path/filepath"
+
 	"flag"
 	"strconv"
 	"unicode"
@@ -8,19 +11,20 @@ import (
 	"github.com/IceWizard98/series_downloader/models"
 	"github.com/IceWizard98/series_downloader/models/animeunity"
 	"github.com/IceWizard98/series_downloader/models/user"
+	"github.com/IceWizard98/series_downloader/utils/bloomFilter"
 	"github.com/IceWizard98/series_downloader/utils/routinepoll"
 	"github.com/skratchdot/open-golang/open"
 
 	"bufio"
-	"fmt"
 	"os"
 	"strings"
 
 	"github.com/joho/godotenv"
 )
 
+
 func main() {
-	anime_title := flag.String("title", "", "Anime title")
+	serie_title := flag.String("title", "", "Anime title")
 	userName    := flag.String("user", "", "Eser.env file for configuration loading")
 
 	flag.Parse()
@@ -42,15 +46,17 @@ func main() {
 		return
 	}
 
-	user := user.GetInstance(*userName, userRootDir)
+	filter := bloomfilter.GetInstance()
+	user   := user.GetInstance(*userName, userRootDir)
 
-	if *anime_title == "" || len(*anime_title) == 0 {
+	fmt.Println(filter.Filter)
+	if *serie_title == "" || len(*serie_title) == 0 {
 		fmt.Println("Please provide an anime title")
 		return
 	}
 
 	animeUnityInstance := animeunity.Init()
-	animeList          := animeUnityInstance.Search(*anime_title)
+	animeList          := animeUnityInstance.Search(*serie_title)
 
 	if len(animeList) == 0 {
 		fmt.Println("No results found")
@@ -219,4 +225,5 @@ func main() {
 	}
 
 	pool.Wait()
+	//TODO: currently useless but filter must be updated on --serve version
 }

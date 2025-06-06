@@ -3,8 +3,10 @@ package user
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 
 	"github.com/IceWizard98/series_downloader/models"
+	bloomfilter "github.com/IceWizard98/series_downloader/utils/bloomFilter"
 )
 
 var instance *user
@@ -33,6 +35,15 @@ func GetInstance(name string, rootDir string) *user {
 			RootDir: rootDir,
 		}
 	}
+
+	bloomFilter := bloomfilter.GetInstance()
+  filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil { return err }
+
+		if !d.IsDir() { bloomFilter.Add([]byte(path)) }
+
+		return nil
+	})
 
 	return instance
 }
@@ -64,17 +75,9 @@ func (u *user) AddHistory(provider string, animeID string, episode models.Episod
 
 	var history *userHistory
 	for i, h := range u.history {
-		if h.Provider != provider {
-			continue
-		}
-
-		if h.AnimeID != animeID {
-			continue
-		}
-
-		if h.EpisodeID == episode.ID {
-			return
-		}
+		if h.Provider  != provider   { continue }
+		if h.AnimeID   != animeID    { continue }
+		if h.EpisodeID == episode.ID { return }
 
 		history = &u.history[i]
 		break

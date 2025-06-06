@@ -15,6 +15,7 @@ import (
 
 	"github.com/IceWizard98/series_downloader/models"
 	"github.com/IceWizard98/series_downloader/models/httpclient"
+	bloomfilter "github.com/IceWizard98/series_downloader/utils/bloomFilter"
 	"github.com/PuerkitoBio/goquery"
 )
 
@@ -183,13 +184,16 @@ func (a *animeUnity) GetEpisodes( animeModel models.Serie ) []models.Episode {
 	Download an episode using the API endpoint and save it to disk
 */
 func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (string, error) {
-	//TODO: check if this file is present in the disk
-  basePath := fmt.Sprintf(rootDir + "/anime/%s", a.anime.Slug)
+  basePath := fmt.Sprintf(rootDir + "/%s", a.anime.Slug)
 	fileName := fmt.Sprintf("%d.mp4", episode.Number)
 	fullPath := basePath + "/" + fileName
 
-	if _, err := os.Stat(fullPath); err == nil {
-		return fullPath, nil
+	filter := bloomfilter.GetInstance()
+
+	if filter.Contains([]byte(fullPath)) {
+		if _, err := os.Stat(fullPath); err == nil {
+			return fullPath, nil
+		}
 	}
 
   response, err := a.Client.DoRequest("GET", fmt.Sprintf("/anime/%d-%s/%d", a.anime.ID, a.anime.Slug, episode.ID), "")
