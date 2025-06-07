@@ -8,7 +8,7 @@ import (
 	"unicode"
 )
 
-var istance *routinePool
+var instance *routinePool
 const MAX_CONCURRENT_DOWNLOADS = "5"
 type routinePool struct {
 	jobs chan func()
@@ -16,7 +16,7 @@ type routinePool struct {
 }
 
 func GetInstance() *routinePool {
-	if istance == nil {
+	if instance == nil {
 		maxConcurrentDownloads := os.Getenv("MAX_CONCURRENT_DOWNLOADS")
 
 		if maxConcurrentDownloads == "" || len(maxConcurrentDownloads) == 0 {
@@ -36,21 +36,21 @@ func GetInstance() *routinePool {
 			panic(err)
 		}
 
-		istance = &routinePool{
+		instance = &routinePool{
 			jobs: make(chan func(), poolSize),
 			wg: &sync.WaitGroup{},
 		}
 
 		for range poolSize {
 			go func() {
-				for task := range istance.jobs {
+				for task := range instance.jobs {
 					task()
-					istance.wg.Done()
+					instance.wg.Done()
 				}
 			}()
 		}
 	}
-	return istance
+	return instance
 }
 
 func (r *routinePool) AddTask(task func()) {

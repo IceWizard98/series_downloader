@@ -1,19 +1,25 @@
-package models
+package user
 
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
+
+	"github.com/IceWizard98/series_downloader/models"
+	bloomfilter "github.com/IceWizard98/series_downloader/utils/bloomFilter"
 )
 
-type User struct {
-	Name     string
+var instance *user
+
+type user struct {
+	Name    string
 	RootDir string
-	history  []userHistory
+	history []userHistory
 }
 
 type userHistory struct {
   Provider      string `json:"provider"`
-  AnimeID       string   `json:"anime_id"`
+  AnimeID       string  `json:"anime_id"`
   EpisodeID     uint   `json:"episode_id"`
 	EpisodeNumber uint16 `json:"episode_number"`
 }
@@ -22,10 +28,29 @@ const (
 	HISTORY_FILE = "/history.json"
 )
 
+func GetInstance(name string, rootDir string) *user {
+	if instance == nil {
+		instance = &user{
+			Name:    name,
+			RootDir: rootDir,
+		}
+	}
+
+	bloomFilter := bloomfilter.GetInstance()
+  filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil { return err }
+
+		if !d.IsDir() { bloomFilter.Add([]byte(path)) }
+
+		return nil
+	})
+
+	return instance
+}
 /*
   Load from disk and return the user history
 */
-func (u *User) GetHistory() []userHistory {
+func (u *user) GetHistory() []userHistory {
 	if u.history == nil {
 		u.history = []userHistory{}
 
@@ -42,7 +67,7 @@ func (u *User) GetHistory() []userHistory {
 /*
 	Adds a new episode to the user history
 */
-func (u *User) AddHistory(provider string, animeID string, episode Episode) {
+func (u *user) AddHistory(provider string, animeID string, episode models.Episode) {
 
 	if u.history == nil {
 		u.GetHistory()
@@ -50,17 +75,9 @@ func (u *User) AddHistory(provider string, animeID string, episode Episode) {
 
 	var history *userHistory
 	for i, h := range u.history {
-		if h.Provider != provider {
-			continue
-		}
-
-		if h.AnimeID != animeID {
-			continue
-		}
-
-		if h.EpisodeID == episode.ID {
-			return
-		}
+		if h.Provider  != provider   { continue }
+		if h.AnimeID   != animeID    { continue }
+		if h.EpisodeID == episode.ID { return }
 
 		history = &u.history[i]
 		break

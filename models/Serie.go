@@ -1,6 +1,6 @@
 package models
 
-type Anime struct {
+type Serie struct {
 	ID       string  
 	Name     string
 	ImageURL string

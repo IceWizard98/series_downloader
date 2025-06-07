@@ -15,6 +15,7 @@ import (
 
 	"github.com/IceWizard98/series_downloader/models"
 	"github.com/IceWizard98/series_downloader/models/httpclient"
+	bloomfilter "github.com/IceWizard98/series_downloader/utils/bloomFilter"
 	"github.com/PuerkitoBio/goquery"
 )
 
@@ -54,9 +55,9 @@ func Init() *animeUnity {
 
 /*
 	Search for animes by title using the API endpoint
-  The result is a list of models.Anime
+  The result is a list of models.Serie
 */
-func (a animeUnity) Search( query string ) []models.Anime {
+func (a animeUnity) Search( query string ) []models.Serie {
 	search        := fmt.Sprintf(`{"title":"%s"}`, query)
 	response, err := a.Client.DoRequest("POST", "/livesearch", search)
 
@@ -81,9 +82,9 @@ func (a animeUnity) Search( query string ) []models.Anime {
 		panic(err)
 	}
 
-	var animeModels []models.Anime
+	var animeModels []models.Serie
 	for _, v := range animeList {
-		animeModels = append(animeModels, models.Anime{
+		animeModels = append(animeModels, models.Serie{
 			ID:       fmt.Sprintf("%d", v.ID),
 			Name:     v.Name,
 			ImageURL: v.ImageURL,
@@ -99,7 +100,7 @@ func (a animeUnity) Search( query string ) []models.Anime {
   Get the anime episodes using the API endpoint
 	The result is a list of models.Episode
 */
-func (a *animeUnity) GetEpisodes( animeModel models.Anime ) []models.Episode {
+func (a *animeUnity) GetEpisodes( animeModel models.Serie ) []models.Episode {
 	numberId, err := strconv.ParseUint(animeModel.ID, 10, 64); if err != nil {
 		panic(err)
 	}
@@ -183,13 +184,16 @@ func (a *animeUnity) GetEpisodes( animeModel models.Anime ) []models.Episode {
 	Download an episode using the API endpoint and save it to disk
 */
 func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (string, error) {
-	//TODO: check if this file is present in the disk
-  basePath := fmt.Sprintf(rootDir + "/anime/%s", a.anime.Slug)
+  basePath := fmt.Sprintf(rootDir + "/%s", a.anime.Slug)
 	fileName := fmt.Sprintf("%d.mp4", episode.Number)
 	fullPath := basePath + "/" + fileName
 
-	if _, err := os.Stat(fullPath); err == nil {
-		return fullPath, nil
+	filter := bloomfilter.GetInstance()
+
+	if filter.Contains([]byte(fullPath)) {
+		if _, err := os.Stat(fullPath); err == nil {
+			return fullPath, nil
+		}
 	}
 
   response, err := a.Client.DoRequest("GET", fmt.Sprintf("/anime/%d-%s/%d", a.anime.ID, a.anime.Slug, episode.ID), "")
