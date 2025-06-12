@@ -11,11 +11,11 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"sync"
 
 	"github.com/IceWizard98/series_downloader/models"
 	"github.com/IceWizard98/series_downloader/models/httpclient"
 	bloomfilter "github.com/IceWizard98/series_downloader/utils/bloomFilter"
+	"github.com/IceWizard98/series_downloader/utils/routinepoll"
 	"github.com/PuerkitoBio/goquery"
 )
 
@@ -28,7 +28,7 @@ type anime struct {
 	ID          uint      `json:"id"`
 	Name        string    `json:"title_eng"`
 	ImageURL    string    `json:"imageurl"`
-	Episodes    uint      `json:"episodes_count"`
+	Episodes    uint      `json:"real_episodes_count"`
 	Slug        string    `json:"slug"`
 }
 
@@ -114,28 +114,30 @@ func (a *animeUnity) GetEpisodes( animeModel models.Serie ) []models.Episode {
 	}
 
 	totEpisodes := a.anime.Episodes
-	ch          := make(chan []byte)
 
-	var wg sync.WaitGroup
+	if totEpisodes == 0 {
+		return nil
+	}
+
+	pool := routinepoll.GetInstance()
+	ch := make(chan []byte)
 
 	for i := uint(1); i <= totEpisodes; i += 120 {
-		wg.Add(1)
+		pool.AddTask( func() {
+			func(ch chan<- []byte, start uint) {
+  	    response, err := a.Client.DoRequest("GET", fmt.Sprintf("/info_api/%d/1?start_range=%d&end_range=%d", a.anime.ID, start, start+119), "")
 
-		go func( start uint ) {
-		  defer wg.Done()
-
-  	  response, err := a.Client.DoRequest("GET", fmt.Sprintf("/info_api/%d/1?start_range=%d&end_range=%d", a.anime.ID, start, start+119), "")
-
-  	  if err != nil {
-  	  	return
-  	  }
+  	    if err != nil {
+  	    	return
+  	    }
   
-  	  ch <- response
-		}(i)
+  	    ch <- response
+			}(ch, i)
+		})
 	}
 
 	go func() {
-    wg.Wait()
+		pool.Wait()
     close(ch)
   }()
 
