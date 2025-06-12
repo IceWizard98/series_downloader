@@ -57,29 +57,29 @@ func Init() *animeUnity {
 	Search for animes by title using the API endpoint
   The result is a list of models.Serie
 */
-func (a animeUnity) Search( query string ) []models.Serie {
+func (a animeUnity) Search( query string ) ([]models.Serie, error) {
 	search        := fmt.Sprintf(`{"title":"%s"}`, query)
 	response, err := a.Client.DoRequest("POST", "/livesearch", search)
 
 	if err != nil {
-		panic(err.Error())
+		return nil, fmt.Errorf("error searching for %s", query)
 	}
 	
 	if string(response) == "null" || response == nil {
 		fmt.Println("Response is empty")
-		return nil
+		return make([]models.Serie, 0), nil
 	}
 
 	var res map[string]json.RawMessage
 	err = json.Unmarshal(response, &res)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("error searching for %s: %s", query, err)
 	}
 
 	var animeList []anime
 	err = json.Unmarshal(res["records"], &animeList)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("error searching for %s: %s", query, err)
 	}
 
 	var animeModels []models.Serie
@@ -93,16 +93,16 @@ func (a animeUnity) Search( query string ) []models.Serie {
 		})
 	}
 
-	return animeModels
+	return animeModels, nil
 }
 
 /*
   Get the anime episodes using the API endpoint
 	The result is a list of models.Episode
 */
-func (a *animeUnity) GetEpisodes( animeModel models.Serie ) []models.Episode {
+func (a *animeUnity) GetEpisodes( animeModel models.Serie ) ([]models.Episode, error) {
 	numberId, err := strconv.ParseUint(animeModel.ID, 10, 64); if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("error parsing id: %s", err)
 	}
 
 	a.anime = anime{
@@ -116,11 +116,11 @@ func (a *animeUnity) GetEpisodes( animeModel models.Serie ) []models.Episode {
 	totEpisodes := a.anime.Episodes
 
 	if totEpisodes == 0 {
-		return nil
+		return make([]models.Episode, 0), nil
 	}
 
 	pool := routinepoll.GetInstance()
-	ch := make(chan []byte)
+	ch   := make(chan []byte)
 
 	for i := uint(1); i <= totEpisodes; i += 120 {
 		pool.AddTask( func() {
@@ -149,13 +149,13 @@ func (a *animeUnity) GetEpisodes( animeModel models.Serie ) []models.Episode {
 	  var resultJson map[string]json.RawMessage
 		err := json.Unmarshal(res, &resultJson)
 	  if err != nil {
-	  	panic(err)
+			return nil, fmt.Errorf("on base response unmarshal %s: %s", a.anime.Name, err)
 	  }
 
 	  var episodesListChunk []episode
 	  err = json.Unmarshal(resultJson["episodes"], &episodesListChunk)
 	  if err != nil {
-	  	panic(err)
+			return nil, fmt.Errorf("on unmarshal episodes %s: %s", a.anime.Name, err)
 	  }
 
 	  for _, v := range episodesListChunk {
@@ -179,7 +179,7 @@ func (a *animeUnity) GetEpisodes( animeModel models.Serie ) []models.Episode {
 		return episodesList[i].Number < episodesList[j].Number
 	})
 
-	return episodesList
+	return episodesList, nil
 }
 
 /*
