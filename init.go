@@ -53,7 +53,12 @@ func main() {
 	}
 
 	animeUnityInstance := animeunity.Init()
-	animeList := animeUnityInstance.Search(*serie_title)
+	animeList, err     := animeUnityInstance.Search(*serie_title)
+
+	if err != nil {
+		fmt.Printf("Error retriving series %s\n", err )
+		return
+	}
 
 	if len(animeList) == 0 {
 		fmt.Println("No results found")
@@ -117,7 +122,17 @@ func main() {
 
 	var episodes []models.Episode
 	if toContinue {
-		episodes = animeUnityInstance.GetEpisodes(selectedAnime)
+		episodes, err = animeUnityInstance.GetEpisodes(selectedAnime)
+
+		if err != nil {
+			fmt.Printf("Error retriving series %s\n", err )
+			return
+		}
+
+		if len(episodes) == 0 {
+			fmt.Println("No episodes found")
+			return
+		}
 
 		if uint16(len(episodes)) <= selectedEpisode.Number {
 			fmt.Println("Anime is over, well done!")
@@ -127,7 +142,12 @@ func main() {
 		fmt.Printf("Continue watching episode %d\n", selectedEpisode.Number+1)
 		selectedEpisode = episodes[selectedEpisode.Number]
 	} else {
-		episodes = animeUnityInstance.GetEpisodes(selectedAnime)
+		episodes, err = animeUnityInstance.GetEpisodes(selectedAnime)
+
+		if err != nil {
+			fmt.Printf("Error retriving series %s\n", err )
+			return
+		}
 
 		if len(episodes) == 0 {
 			fmt.Println("No episodes found")
@@ -170,17 +190,23 @@ func main() {
 
 	pool.AddTask(func() {
 		func(episode models.Episode) {
-			// fmt.Printf("Downloading main episode %d\n", episode.Number)
 			path, error := animeUnityInstance.DownloadEpisode(episode, user.RootDir)
 
 			if error != nil {
 				fmt.Printf("Error downloading episode %d: %s\n", episode.Number, error)
-			} else {
-				fmt.Printf("Episode downloaded: %d\n", episode.Number)
-				user.AddHistory("animeunity", selectedAnime.ID, episode)
-				if err := open.Run(path); err != nil {
-					fmt.Printf("Error opening file to Play episode %s: %s\n", path, err)
-				}
+				return
+			}
+
+			fmt.Printf("Episode downloaded: %d\n", episode.Number)
+			stat, err := os.Stat(path)
+			if err == nil || stat.Size() <= 0 || stat.IsDir() {
+				fmt.Printf("Error opening file to Play episode %s: %s\n", path, err)
+				return
+			} 
+
+			user.AddHistory("animeunity", selectedAnime.ID, episode)
+			if err := open.Run(path); err != nil {
+				fmt.Printf("Error opening file to Play episode %s: %s\n", path, err)
 			}
 		}(selectedEpisode)
 	})
@@ -205,7 +231,6 @@ func main() {
 		fmt.Printf("Error parsing %s: %s\n", downloadNextNEpisodes, err)
 	}
 
-	// fmt.Printf("Downloading %d next episodes\n", nextNEpisodes)
 	// The iterator starts at 0, but the first episode has number = 1 and is at index 0 in the slice.
 	// This means we can simply add the iterator to the number of episodes already downloaded —
 	// the result will correctly match the index in the slice.
@@ -219,9 +244,10 @@ func main() {
 
 				if error != nil {
 					fmt.Printf("Error downloading episode %d: %s\n", episode.Number, error)
-				} else {
-					fmt.Printf("Episode downloaded: %d\n", episode.Number)
-				}
+					return
+				} 
+
+				fmt.Printf("Episode downloaded: %d\n", episode.Number)
 			})
 		} else {
 			break
