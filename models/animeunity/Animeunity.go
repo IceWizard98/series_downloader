@@ -62,7 +62,7 @@ func (a animeUnity) Search( query string ) ([]models.Serie, error) {
 	response, err := a.Client.DoRequest("POST", "/livesearch", search)
 
 	if err != nil {
-		return nil, fmt.Errorf("error searching for %s", query)
+		return nil, fmt.Errorf("error searching for %s: \n%s", query, err)
 	}
 	
 	if string(response) == "null" || response == nil {
@@ -73,13 +73,13 @@ func (a animeUnity) Search( query string ) ([]models.Serie, error) {
 	var res map[string]json.RawMessage
 	err = json.Unmarshal(response, &res)
 	if err != nil {
-		return nil, fmt.Errorf("error searching for %s: %s", query, err)
+		return nil, fmt.Errorf("error searching for %s: \n%s", query, err)
 	}
 
 	var animeList []anime
 	err = json.Unmarshal(res["records"], &animeList)
 	if err != nil {
-		return nil, fmt.Errorf("error searching for %s: %s", query, err)
+		return nil, fmt.Errorf("error searching for %s: \n%s", query, err)
 	}
 
 	var animeModels []models.Serie
@@ -102,7 +102,7 @@ func (a animeUnity) Search( query string ) ([]models.Serie, error) {
 */
 func (a *animeUnity) GetEpisodes( animeModel models.Serie ) ([]models.Episode, error) {
 	numberId, err := strconv.ParseUint(animeModel.ID, 10, 64); if err != nil {
-		return nil, fmt.Errorf("error parsing id: %s", err)
+		return nil, fmt.Errorf("error parsing id: \n%s", err)
 	}
 
 	a.anime = anime{
@@ -149,13 +149,13 @@ func (a *animeUnity) GetEpisodes( animeModel models.Serie ) ([]models.Episode, e
 	  var resultJson map[string]json.RawMessage
 		err := json.Unmarshal(res, &resultJson)
 	  if err != nil {
-			return nil, fmt.Errorf("on base response unmarshal %s: %s", a.anime.Name, err)
+			return nil, fmt.Errorf("on base response unmarshal %s: \n%s", a.anime.Name, err)
 	  }
 
 	  var episodesListChunk []episode
 	  err = json.Unmarshal(resultJson["episodes"], &episodesListChunk)
 	  if err != nil {
-			return nil, fmt.Errorf("on unmarshal episodes %s: %s", a.anime.Name, err)
+			return nil, fmt.Errorf("on unmarshal episodes %s: \n%s", a.anime.Name, err)
 	  }
 
 	  for _, v := range episodesListChunk {
@@ -232,22 +232,19 @@ func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 	{
 	  req, err := http.NewRequest("GET", embedUrl, nil)
 	  if err != nil {
-	  	error = err
-	  	return "", error
+	  	return "", fmt.Errorf("error creating request: \n%s", err) 
 	  }
 
 	  resp, err := http.DefaultClient.Do(req)
 	  if err != nil {
-	  	error = err
-	  	return "", error
+	  	return "", fmt.Errorf("error doing request: \n%s", err)
 	  }
 
 	  defer resp.Body.Close()
 
 		embedHtml, err = io.ReadAll(resp.Body)
 	  if err != nil {
-	  	error = err
-	  	return "", error
+	  	return "", fmt.Errorf("error reading response: \n%s", err)
 	  }
 	}
 
@@ -258,8 +255,7 @@ func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 
 	embedDoc, err := goquery.NewDocumentFromReader( bytes.NewReader(embedHtml) )
 	if err != nil {
-		error = err
-	  return "", error
+	  return "", fmt.Errorf("error creating document: \n%s", err)
 	}
 
 	// find the download url and use it to download the episond and saavi it into a file
@@ -275,36 +271,35 @@ func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 	})
 
 	if downloadUrl == "" {
-		error = errors.New("download url not found")
-	  return "", error
+	  return "", errors.New("download url not found")
 	}
 
 	{
     resp, err := http.Get(downloadUrl)
     if err != nil {
-			return "", err
+			return "", fmt.Errorf("error getting download url: \n%s", err)
     }
     defer resp.Body.Close()
 
     if resp.StatusCode != http.StatusOK {
-			return "", fmt.Errorf("errore nella risposta: %s", resp.Status)
+			return "", fmt.Errorf("invalid status code: %s", resp.Status)
     }
 
 		err = os.MkdirAll(basePath, os.ModePerm)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("error creating directory: \n%s", err)
 		}
 
     outFile, err := os.Create(fullPath)
 
     if err != nil {
-			return "", err
+			return "", fmt.Errorf("error creating file: \n%s", err)
     }
     defer outFile.Close()
 
     _, err = io.Copy(outFile, resp.Body)
     if err != nil {
-			return "", err
+			return "", fmt.Errorf("error copying file: \n%s", err)
     }
 	}
 

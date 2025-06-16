@@ -1,0 +1,195 @@
+name: Auto Release on /tag by Code Owner
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  release-on-comment:
+    if: |
+      github.event.issue.pull_request
+      && contains(github.event.comment.body, '/tag')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Get PR info
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.issue.number,
+            });
+            return pr.data;
+
+      - name: Check commenter permission
+        id: check-perm
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: context.payload.comment.user.login
+            });
+            console.log(`User permission: ${data.permission}`);
+            core.setOutput('permission', data.permission);
+            return data.permission;
+
+      - name: Stop if not Code Owner
+        if: ${{ !contains('write,admin,maintain', steps.check-perm.outputs.permission) }}
+        run: |
+          echo "User ${{ github.event.comment.user.login }} is not authorized (permission: ${{ steps.check-perm.outputs.permission }})"
+          exit 1
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          # Checkout del branch della PR invece di main
+          ref: ${{ fromJson(steps.pr.outputs.result).head.ref }}
+
+      - name: Extract version from comment
+        id: comment-version
+        run: |
+          comment_body="${{ github.event.comment.body }}"
+          if [[ "$comment_body" =~ /tag[[:space:]]+v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            version="v${BASH_REMATCH[1]}"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "Found version in comment: $version"
+          else
+            echo "version=" >> "$GITHUB_OUTPUT"
+            echo "No valid version found in comment"
+          fi
+
+      - name: Check if tag already exists
+        id: check-tag
+        run: |
+          version="${{ steps.comment-version.outputs.version }}"
+          if [ -n "$version" ]; then
+            if git rev-parse "$version" >/dev/null 2>&1; then
+              echo "Tag $version already exists!"
+              echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get latest existing tag
+        id: get-latest
+        run: |
+          latest=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || echo "")
+          echo "tag=$latest" >> "$GITHUB_OUTPUT"
+          echo "Latest tag: $latest"
+
+      - name: Generate version (fallback)
+        id: fallback-version
+        if: steps.comment-version.outputs.version == '' || steps.check-tag.outputs.tag_exists == 'true'
+        run: |
+          latest="${{ steps.get-latest.outputs.tag }}"
+          if [[ "$latest" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+            patch="${BASH_REMATCH[3]}"
+            patch=$((patch + 1))
+            new_version="v$major.$minor.$patch"
+          else
+            new_version="v1.0.0"
+          fi
+          echo "new_version=$new_version" >> "$GITHUB_OUTPUT"
+          echo "Generated fallback version: $new_version"
+
+      - name: Set final version
+        id: final-version
+        run: |
+          if [ "${{ steps.comment-version.outputs.version }}" != "" ] && [ "${{ steps.check-tag.outputs.tag_exists }}" = "false" ]; then
+            version="${{ steps.comment-version.outputs.version }}"
+            echo "Using version from comment: $version"
+          else
+            version="${{ steps.fallback-version.outputs.new_version }}"
+            echo "Using fallback version: $version"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog from commits
+        id: changelog
+        run: |
+          # Genera changelog dai commit del branch della PR rispetto a main
+          base_branch="${{ fromJson(steps.pr.outputs.result).base.ref }}"
+          head_sha="${{ fromJson(steps.pr.outputs.result).head.sha }}"
+          
+          echo "Generating changelog from $base_branch to $head_sha"
+          
+          # Fetch del branch base per il confronto
+          git fetch origin "$base_branch"
+          
+          commits=$(git log --pretty=format:"- %s (%h)" "origin/$base_branch".."$head_sha" 2>/dev/null || echo "- Initial release")
+          
+          {
+            echo "changelog<<EOF"
+            if [ -n "$commits" ]; then
+              echo "$commits"
+            else
+              echo "- No commits found"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          version="${{ steps.final-version.outputs.version }}"
+          echo "Creating tag: $version"
+          
+          git tag -a "$version" -m "Auto tag via PR #${{ github.event.issue.number }}"
+          git push origin "$version"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.final-version.outputs.version }}
+          name: Release ${{ steps.final-version.outputs.version }}
+          body: |
+            🔖 Release automatically created by a Code Owner on PR #${{ github.event.issue.number }}
+            
+            **Triggered by:** @${{ github.event.comment.user.login }}
+            **PR:** #${{ github.event.issue.number }} - ${{ fromJson(steps.pr.outputs.result).title }}
+
+            ## Changelog
+            ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+
+      - name: Add success comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.payload.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ Release ${{ steps.final-version.outputs.version }} created successfully!\n\n[View Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.final-version.outputs.version }})`
+            });
+
+      - name: Add failure comment
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.payload.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `❌ Failed to create release. Check the [workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`
+            });
+
