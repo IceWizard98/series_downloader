@@ -1,0 +1,326 @@
+name: Multi-Platform Build and Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for the release'
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux builds
+          - goos: linux
+            goarch: amd64
+            extension: ""
+          - goos: linux
+            goarch: arm64
+            extension: ""
+          - goos: linux
+            goarch: arm
+            goarm: 7
+            extension: ""
+          - goos: linux
+            goarch: 386
+            extension: ""
+          
+          # Windows builds
+          - goos: windows
+            goarch: amd64
+            extension: ".exe"
+          - goos: windows
+            goarch: arm64
+            extension: ".exe"
+          - goos: windows
+            goarch: 386
+            extension: ".exe"
+          
+          # macOS builds
+          - goos: darwin
+            goarch: amd64
+            extension: ""
+          - goos: darwin
+            goarch: arm64
+            extension: ""
+          
+          # FreeBSD builds
+          - goos: freebsd
+            goarch: amd64
+            extension: ""
+          - goos: freebsd
+            goarch: arm64
+            extension: ""
+          
+          # OpenBSD builds
+          - goos: openbsd
+            goarch: amd64
+            extension: ""
+          - goos: openbsd
+            goarch: arm64
+            extension: ""
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Get project info
+        id: project
+        run: |
+          if [ -f "go.mod" ]; then
+            PROJECT_NAME=$(grep "^module " go.mod | awk '{print $2}' | sed 's/.*\///')
+          else
+            PROJECT_NAME="${GITHUB_REPOSITORY##*/}"
+          fi
+          echo "name=$PROJECT_NAME" >> $GITHUB_OUTPUT
+          
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ inputs.tag_name }}"
+          fi
+
+          VERSION=${VERSION#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          echo "Project: $PROJECT_NAME"
+          echo "Version: $VERSION"
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          
+          BINARY_NAME="${{ steps.project.outputs.name }}"
+          
+          if [ "${{ matrix.goarch }}" = "arm" ] && [ "${{ matrix.goarm }}" = "7" ]; then
+            ARCH_SUFFIX="armv7"
+          else
+            ARCH_SUFFIX="${{ matrix.goarch }}"
+          fi
+          
+          FILENAME="${BINARY_NAME}-v${{ steps.project.outputs.version }}-${{ matrix.goos }}-${ARCH_SUFFIX}${{ matrix.extension }}"
+          
+          echo "Building $FILENAME..."
+          
+          go build -v \
+            -ldflags="-w -s -X main.version=${{ steps.project.outputs.version }} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o "dist/$FILENAME" \
+            .
+          
+          if [ -f "dist/$FILENAME" ]; then
+            echo "✅ Build successful: $FILENAME"
+            echo "📦 Size: $(stat -c%s dist/$FILENAME | numfmt --to=iec-i --suffix=B)"
+            
+            # Test linux build
+            if [ "${{ matrix.goos }}" = "linux" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
+              echo "🧪 Testing binary..."
+              chmod +x "dist/$FILENAME"
+              if ./dist/$FILENAME --version 2>/dev/null || ./dist/$FILENAME -version 2>/dev/null || ./dist/$FILENAME version 2>/dev/null; then
+                echo "✅ Binary test passed"
+              else
+                echo "⚠️ Binary test failed or no version flag available"
+              fi
+            fi
+          else
+            echo "❌ Build failed: $FILENAME"
+            exit 1
+          fi
+          
+          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+        id: build
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          echo "Generating checksums for ${{ steps.build.outputs.filename }}..."
+          
+          # SHA256
+          sha256sum "${{ steps.build.outputs.filename }}" > "${{ steps.build.outputs.filename }}.sha256"
+          
+          # MD5
+          md5sum "${{ steps.build.outputs.filename }}" > "${{ steps.build.outputs.filename }}.md5"
+          
+          echo "📋 SHA256: $(cat ${{ steps.build.outputs.filename }}.sha256)"
+          echo "📋 MD5: $(cat ${{ steps.build.outputs.filename }}.md5)"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build.outputs.filename }}
+          path: |
+            dist/${{ steps.build.outputs.filename }}
+            dist/${{ steps.build.outputs.filename }}.sha256
+            dist/${{ steps.build.outputs.filename }}.md5
+          retention-days: 7
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag_name }}
+          files: |
+            dist/${{ steps.build.outputs.filename }}
+            dist/${{ steps.build.outputs.filename }}.sha256
+            dist/${{ steps.build.outputs.filename }}.md5
+          body_append: |
+            
+            ## 📦 Build Information - ${{ matrix.goos }}/${{ matrix.goarch }}
+            
+            **Binary:** `${{ steps.build.outputs.filename }}`  
+            **Size:** $(stat -c%s dist/${{ steps.build.outputs.filename }} | numfmt --to=iec-i --suffix=B)  
+            **Platform:** ${{ matrix.goos }}/${{ matrix.goarch }}${{ matrix.goarm && format(' (ARM v{0})', matrix.goarm) || '' }}
+
+  create-release-summary:
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate release summary
+        run: |
+          echo "# 🚀 Multi-Platform Build Summary" > release-summary.md
+          echo "" >> release-summary.md
+          echo "**Release:** ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag_name }}" >> release-summary.md
+          echo "**Build Date:** $(date -u)" >> release-summary.md
+          echo "" >> release-summary.md
+          echo "## 📦 Available Binaries" >> release-summary.md
+          echo "" >> release-summary.md
+          echo "| Platform | Architecture | File | Size | SHA256 |" >> release-summary.md
+          echo "|----------|--------------|------|------|--------|" >> release-summary.md
+          
+          # Processa tutti gli artifact
+          total_size=0
+          binary_count=0
+          
+          for artifact_dir in artifacts/*/; do
+            if [ -d "$artifact_dir" ]; then
+              for binary in "$artifact_dir"/*; do
+                if [[ "$binary" != *.sha256 ]] && [[ "$binary" != *.md5 ]]; then
+                  filename=$(basename "$binary")
+                  
+                  # Estrai informazioni dal nome del file
+                  if [[ "$filename" =~ ([^-]+)-v([^-]+)-([^-]+)-([^.]+)(\.exe)? ]]; then
+                    project="${BASH_REMATCH[1]}"
+                    version="${BASH_REMATCH[2]}"
+                    os="${BASH_REMATCH[3]}"
+                    arch="${BASH_REMATCH[4]}"
+                    
+                    # Calcola dimensione
+                    size=$(stat -c%s "$binary" 2>/dev/null || echo "0")
+                    size_human=$(numfmt --to=iec-i --suffix=B "$size" 2>/dev/null || echo "N/A")
+                    total_size=$((total_size + size))
+                    binary_count=$((binary_count + 1))
+                    
+                    # Leggi SHA256 se disponibile
+                    sha256_file="${binary}.sha256"
+                    if [ -f "$sha256_file" ]; then
+                      sha256=$(cut -d' ' -f1 "$sha256_file")
+                      sha256_short="${sha256:0:16}..."
+                    else
+                      sha256_short="N/A"
+                    fi
+                    
+                    echo "| $os | $arch | \`$filename\` | $size_human | \`$sha256_short\` |" >> release-summary.md
+                  fi
+                fi
+              done
+            fi
+          done
+          
+          echo "" >> release-summary.md
+          echo "## 📊 Build Statistics" >> release-summary.md
+          echo "" >> release-summary.md
+          echo "- **Total binaries:** $binary_count" >> release-summary.md
+          echo "- **Total size:** $(numfmt --to=iec-i --suffix=B $total_size)" >> release-summary.md
+          echo "- **Platforms supported:** Linux, Windows, macOS, FreeBSD, OpenBSD" >> release-summary.md
+          echo "- **Architectures:** amd64, arm64, arm (v7), 386" >> release-summary.md
+          echo "" >> release-summary.md
+          echo "## 🔒 Verification" >> release-summary.md
+          echo "" >> release-summary.md
+          echo "Each binary includes SHA256 and MD5 checksums for verification:" >> release-summary.md
+          echo "" >> release-summary.md
+          echo "\`\`\`bash" >> release-summary.md
+          echo "# Verify SHA256 checksum" >> release-summary.md
+          echo "sha256sum -c <binary-name>.sha256" >> release-summary.md
+          echo "" >> release-summary.md
+          echo "# Verify MD5 checksum" >> release-summary.md
+          echo "md5sum -c <binary-name>.md5" >> release-summary.md
+          echo "\`\`\`" >> release-summary.md
+
+      - name: Upload release summary
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag_name }}
+          files: release-summary.md
+          body_append: |
+            
+            ## 🏗️ Multi-Platform Builds Available
+            
+            This release includes pre-compiled binaries for multiple platforms and architectures.
+            See `release-summary.md` for detailed information about all available binaries.
+            
+            **Quick Download:**
+            - **Linux (x64):** `${{ github.event.repository.name }}-*-linux-amd64`
+            - **Windows (x64):** `${{ github.event.repository.name }}-*-windows-amd64.exe`
+            - **macOS (Intel):** `${{ github.event.repository.name }}-*-darwin-amd64`
+            - **macOS (Apple Silicon):** `${{ github.event.repository.name }}-*-darwin-arm64`
+
+      - name: Build status summary
+        if: always()
+        run: |
+          {
+            echo "## 🏗️ Multi-Platform Build Results"
+            echo ""
+            echo "**Status:** ${{ needs.build.result }}"
+            echo "**Total Platforms:** 11 (Linux, Windows, macOS, FreeBSD, OpenBSD)"
+            echo "**Total Architectures:** 4 (amd64, arm64, armv7, 386)"
+            echo ""
+            
+            if [ "${{ needs.build.result }}" = "success" ]; then
+              echo "✅ All builds completed successfully!"
+              echo ""
+              echo "### 📦 Generated Assets"
+              echo "- Binary executables for all target platforms"
+              echo "- SHA256 and MD5 checksums for each binary"
+              echo "- Detailed release summary with verification instructions"
+            else
+              echo "❌ Some builds may have failed. Check individual job logs for details."
+            fi
+            
+            echo ""
+            echo "### 🔗 Useful Links"
+            echo "- [Release Page](${{ github.event.repository.html_url }}/releases)"
+            echo "- [Build Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          } >> $GITHUB_STEP_SUMMARY

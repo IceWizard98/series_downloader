@@ -1,0 +1,199 @@
+name: Release SBOM and Scan
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  sbom-and-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      security-events: write
+      actions: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Build Go binary
+        run: |
+          echo "Building Go application..."
+          go mod download
+          go build -v ./...
+          echo "Build completed successfully"
+
+      - name: Generate SBOM with Syft
+        uses: anchore/sbom-action@v0.17.0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom/sbom.json
+          upload-artifact: false
+
+      - name: Verify SBOM was created
+        run: |
+          if [ -f "sbom/sbom.json" ]; then
+            echo "SBOM created successfully"
+            echo "SBOM size: $(stat -c%s sbom/sbom.json) bytes"
+            echo "SBOM components count: $(jq '.components | length' sbom/sbom.json)"
+          else
+            echo "ERROR: SBOM file not found!"
+            exit 1
+          fi
+
+      - name: Scan SBOM for vulnerabilities with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'sbom'
+          input: 'sbom/sbom.json'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0' 
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Generate human-readable vulnerability report
+        run: |
+          echo "Generating vulnerability report..."
+          trivy sbom sbom/sbom.json --format table --output vulnerability-report.txt --severity CRITICAL,HIGH,MEDIUM || echo "No vulnerabilities found or scan failed"
+          
+          {
+            echo "# Vulnerability Scan Summary"
+            echo ""
+            echo "**Scan Date:** $(date -u)"
+            echo "**Release:** ${{ github.event.release.tag_name }}"
+            echo ""
+            echo "## Results"
+            echo ""
+            if [ -f "vulnerability-report.txt" ] && [ -s "vulnerability-report.txt" ]; then
+              echo "Vulnerabilities found. See attached report for details."
+              echo ""
+              echo "\`\`\`"
+              head -50 vulnerability-report.txt
+              echo "\`\`\`"
+            else
+              echo "✅ No vulnerabilities found in the specified severity levels."
+            fi
+          } > vulnerability-summary.md
+
+      - name: Check for critical vulnerabilities
+        id: vuln-check
+        run: |
+          critical_count=$(trivy sbom sbom/sbom.json --format json --severity CRITICAL --quiet | jq '.Results[0].Vulnerabilities | length' 2>/dev/null || echo "0")
+          high_count=$(trivy sbom sbom/sbom.json --format json --severity HIGH --quiet | jq '.Results[0].Vulnerabilities | length' 2>/dev/null || echo "0")
+          
+          echo "critical_count=$critical_count" >> $GITHUB_OUTPUT
+          echo "high_count=$high_count" >> $GITHUB_OUTPUT
+          
+          if [ "$critical_count" -gt 0 ]; then
+            echo "⚠️ Found $critical_count CRITICAL vulnerabilities"
+          fi
+          if [ "$high_count" -gt 0 ]; then
+            echo "⚠️ Found $high_count HIGH vulnerabilities"
+          fi
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          cp sbom/sbom.json release-assets/
+          
+          if [ -f "vulnerability-report.txt" ]; then
+            cp vulnerability-report.txt release-assets/
+          fi
+          if [ -f "vulnerability-summary.md" ]; then
+            cp vulnerability-summary.md release-assets/
+          fi
+          
+          tar -czf release-assets/security-reports.tar.gz -C release-assets . --exclude=security-reports.tar.gz
+
+      - name: Upload security assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: |
+            release-assets/sbom.json
+            release-assets/vulnerability-report.txt
+            release-assets/vulnerability-summary.md
+            release-assets/security-reports.tar.gz
+          body_append: |
+            
+            ## Security Information
+            
+            📋 **SBOM (Software Bill of Materials)** included in release assets
+            🔍 **Vulnerability Scan Results:**
+            - Critical vulnerabilities: ${{ steps.vuln-check.outputs.critical_count }}
+            - High vulnerabilities: ${{ steps.vuln-check.outputs.high_count }}
+            
+            Security reports are available in the release assets and in the [Security tab](https://github.com/${{ github.repository }}/security).
+
+      - name: Create security issue if critical vulnerabilities found
+        if: steps.vuln-check.outputs.critical_count > 0
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const criticalCount = ${{ steps.vuln-check.outputs.critical_count }};
+            const highCount = ${{ steps.vuln-check.outputs.high_count }};
+            
+            const issueBody = `
+            🚨 **Critical Security Vulnerabilities Detected**
+            
+            **Release:** ${{ github.event.release.tag_name }}
+            **Critical vulnerabilities:** ${criticalCount}
+            **High vulnerabilities:** ${highCount}
+            
+            Please review the vulnerability report in the [Security tab](https://github.com/${{ github.repository }}/security) and take appropriate action.
+            
+            **Next Steps:**
+            1. Review the detailed vulnerability report
+            2. Update dependencies as needed
+            3. Consider creating a security patch release
+            
+            **Automated scan results are available in:**
+            - [Release assets](${{ github.event.release.html_url }})
+            - [Security tab](https://github.com/${{ github.repository }}/security)
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Critical Security Vulnerabilities in Release ${{ github.event.release.tag_name }}`,
+              body: issueBody,
+              labels: ['security', 'critical', 'vulnerability']
+            });
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## 🔒 Security Scan Summary"
+            echo ""
+            echo "**Release:** ${{ github.event.release.tag_name }}"
+            echo "**Scan Date:** $(date -u)"
+            echo ""
+            echo "### Results"
+            echo "- **Critical vulnerabilities:** ${{ steps.vuln-check.outputs.critical_count }}"
+            echo "- **High vulnerabilities:** ${{ steps.vuln-check.outputs.high_count }}"
+            echo ""
+            echo "### Assets Generated"
+            echo "- ✅ SBOM (Software Bill of Materials)"
+            echo "- ✅ Vulnerability scan report"
+            echo "- ✅ Security summary"
+            echo ""
+            echo "### Links"
+            echo "- [Release with security assets](${{ github.event.release.html_url }})"
+            echo "- [Security tab](https://github.com/${{ github.repository }}/security)"
+          } >> $GITHUB_STEP_SUMMARY
