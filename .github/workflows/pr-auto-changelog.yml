@@ -1,0 +1,112 @@
+name: Auto PR Changelog
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  add-changelog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get PR commits and update description
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { owner, repo } = context.repo;
+          const pr = context.payload.pull_request;
+          
+          const commits = await github.rest.pulls.listCommits({
+            owner,
+            repo,
+            pull_number: pr.number,
+          });
+          
+          let changelog = "\n\n## 📋 Changelog\n\n";
+          
+          if (commits.data.length === 0) {
+            changelog += "_No commits found._\n";
+          } else {
+            commits.data.forEach((commit, index) => {
+              const message = commit.commit.message;
+              const sha = commit.sha.substring(0, 7);
+              const author = commit.commit.author.name;
+              const date = new Date(commit.commit.author.date).toLocaleDateString('it-IT');
+              
+              const firstLine = message.split('\n')[0];
+              
+              changelog += `- **${firstLine}** \`${sha}\` - ${author} (${date})\n`;
+            });
+          }
+          
+          changelog += `\n_Tot commit: ${commits.data.length}_\n`;
+          
+          const currentDescription = pr.body || "";
+          
+          if (currentDescription.includes("## 📋 Changelog")) {
+            console.log("Changelog already present, skip update");
+            return;
+          }
+          
+          const newDescription = currentDescription + changelog;
+          
+          await github.rest.pulls.update({
+            owner,
+            repo,
+            pull_number: pr.number,
+            body: newDescription
+          });
+          
+          console.log(`Changelog added to PR #${pr.number}`);
+
+    - name: Add comment with changelog details
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { owner, repo } = context.repo;
+          const pr = context.payload.pull_request;
+          
+          const files = await github.rest.pulls.listFiles({
+            owner,
+            repo,
+            pull_number: pr.number,
+          });
+          
+          let fileStats = "\n### 📊 Detail:\n";
+          fileStats += `- **Edited files:** ${files.data.length}\n`;
+          
+          const additions = files.data.reduce((sum, file) => sum + file.additions, 0);
+          const deletions = files.data.reduce((sum, file) => sum + file.deletions, 0);
+          
+          fileStats += `- **Added rows:** +${additions}\n`;
+          fileStats += `- **Removed rows:** -${deletions}\n`;
+          
+          if (files.data.length > 0) {
+            fileStats += "\n### 📁 Edited files:\n";
+            files.data.slice(0, 10).forEach(file => {
+              const status = file.status === 'added' ? '🆕' : 
+                           file.status === 'removed' ? '🗑️' : 
+                           file.status === 'modified' ? '✏️' : '📝';
+              fileStats += `${status} \`${file.filename}\` (+${file.additions}/-${file.deletions})\n`;
+            });
+            
+            if (files.data.length > 10) {
+              fileStats += `\n_... more ${files.data.length - 10} file_\n`;
+            }
+          }
+          
+          await github.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number: pr.number,
+            body: `🤖 **Changelog automatically generated!**\n\nPR description have been updated.${fileStats}`
+          });
+
