@@ -59,22 +59,6 @@ jobs:
           - goos: darwin
             goarch: arm64
             extension: ""
-          
-          # FreeBSD builds
-          - goos: freebsd
-            goarch: amd64
-            extension: ""
-          - goos: freebsd
-            goarch: arm64
-            extension: ""
-          
-          # OpenBSD builds
-          - goos: openbsd
-            goarch: amd64
-            extension: ""
-          - goos: openbsd
-            goarch: arm64
-            extension: ""
 
     steps:
       - name: Checkout code
