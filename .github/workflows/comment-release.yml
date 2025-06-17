@@ -50,7 +50,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
           # Checkout del branch della PR invece di main
           ref: ${{ fromJson(steps.pr.outputs.result).head.ref }}
