@@ -1,5 +1,8 @@
 name: Auto PR Changelog
 
+env:
+  GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
 on:
   pull_request:
     types: [opened]

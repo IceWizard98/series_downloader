@@ -1,5 +1,8 @@
 name: Release SBOM and Scan
 
+env:
+  GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
 on:
   release:
     types: [published]
