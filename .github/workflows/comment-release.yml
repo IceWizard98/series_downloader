@@ -52,7 +52,6 @@ jobs:
         with:
           token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
-          # Checkout del branch main per creare il tag sulla versione corrente
           ref: main
 
       - name: Extract version from comment
