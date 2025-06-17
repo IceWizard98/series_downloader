@@ -3,6 +3,9 @@ name: Release SBOM and Scan
 env:
   GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
+permissions:
+  contents: write
+
 on:
   release:
     types: [published]

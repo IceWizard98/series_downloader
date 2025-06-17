@@ -3,6 +3,9 @@ name: Multi-Platform Build and Release
 env:
   GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
+permissions:
+  contents: write
+
 on:
   release:
     types: [published]
