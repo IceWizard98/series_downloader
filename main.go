@@ -21,7 +21,7 @@ import (
 
 func main() {
 	serie_title := flag.String("title", "", "Anime title")
-	userName := flag.String("user", "", "Eser.env file for configuration loading")
+	userName    := flag.String("user", "", "Eser.env file for configuration loading")
 	delete_prev := flag.Bool("delete", false, "Delete previus episodes")
 
 	flag.Parse()
@@ -44,7 +44,7 @@ func main() {
 	}
 
 	filter := bloomfilter.GetInstance()
-	user := user.GetInstance(*userName, userRootDir)
+	user   := user.GetInstance(*userName, userRootDir)
 
 	fmt.Println(filter.Filter)
 	if *serie_title == "" || len(*serie_title) == 0 {
@@ -54,9 +54,8 @@ func main() {
 
 	animeUnityInstance := animeunity.Init()
 	animeList, err     := animeUnityInstance.Search(*serie_title)
-
 	if err != nil {
-		fmt.Printf("Error retriving series \n%s\n", err )
+		fmt.Printf("Error retriving series \n%s\n", err)
 		return
 	}
 
@@ -100,7 +99,7 @@ func main() {
 
 	var selectedEpisode models.Episode
 	selectedAnime := animeList[index_selected-1]
-	toContinue    := false
+	toContinue := false
 	for _, v := range user.GetHistory() {
 		if v.AnimeID == selectedAnime.ID {
 			fmt.Printf("Current episode: %d\n", v.EpisodeNumber)
@@ -124,9 +123,8 @@ func main() {
 	var episodes []models.Episode
 	if toContinue {
 		episodes, err = animeUnityInstance.GetEpisodes(selectedAnime)
-
 		if err != nil {
-			fmt.Printf("Error retriving series \n%s\n", err )
+			fmt.Printf("Error retriving series \n%s\n", err)
 			return
 		}
 
@@ -144,9 +142,8 @@ func main() {
 		selectedEpisode = episodes[selectedEpisode.Number]
 	} else {
 		episodes, err = animeUnityInstance.GetEpisodes(selectedAnime)
-
 		if err != nil {
-			fmt.Printf("Error retriving series \n%s\n", err )
+			fmt.Printf("Error retriving series \n%s\n", err)
 			return
 		}
 
@@ -203,7 +200,7 @@ func main() {
 			if err != nil || stat.Size() <= 0 || stat.IsDir() {
 				fmt.Printf("Error reading file to Play episode %s: \nerror %s\nsize %d\n", path, err, stat.Size())
 				return
-			} 
+			}
 
 			if err := open.Run(path); err != nil {
 				fmt.Printf("Error opening file to Play episode %s: \n%s\n", path, err)
@@ -246,7 +243,7 @@ func main() {
 				if error != nil {
 					fmt.Printf("Error downloading episode %d: \n%s\n", episode.Number, error)
 					return
-				} 
+				}
 
 				fmt.Printf("Episode downloaded: %d\n", episode.Number)
 			})
