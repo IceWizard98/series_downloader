@@ -124,7 +124,6 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            // Ottieni tutti i commit della PR tramite API
             const { data: commits } = await github.rest.pulls.listCommits({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -134,10 +133,9 @@ jobs:
             
             console.log(`Found ${commits.length} commits in PR #${context.payload.issue.number}`);
             
-            // Formatta i commit per il changelog
             const changelogEntries = commits.map(commit => {
               const shortSha = commit.sha.substring(0, 7);
-              const message = commit.commit.message.split('\n')[0]; // Prima riga del messaggio
+              const message = commit.commit.message.split('\n')[0]; 
               return `- ${message} (${shortSha})`;
             });
             
