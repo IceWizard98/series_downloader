@@ -39,8 +39,14 @@ func main() {
 	userRootDir := os.Getenv("USER_ROOT_DIR")
 
 	if userRootDir == "" {
-		fmt.Println("USER_ROOT_DIR is not set")
-		return
+		userDir, err := os.UserHomeDir()
+
+		if err != nil {
+			fmt.Println("Error retriving user home directory")
+			return
+		}
+		userRootDir = userDir + "/.series_downloader"
+
 	}
 
 	filter := bloomfilter.GetInstance()
