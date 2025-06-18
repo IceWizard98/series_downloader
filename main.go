@@ -107,7 +107,7 @@ func main() {
 	selectedAnime := animeList[index_selected-1]
 	toContinue := false
 	for _, v := range user.GetHistory() {
-		if v.AnimeID == selectedAnime.ID {
+		if v.SerieID == selectedAnime.ID {
 			fmt.Printf("Current episode: %d\n", v.EpisodeNumber)
 			fmt.Println("Do you want to whatch the next episode? (y/n)")
 			reader := bufio.NewReader(os.Stdin)
@@ -211,7 +211,7 @@ func main() {
 			if err := open.Run(path); err != nil {
 				fmt.Printf("Error opening file to Play episode %s: \n%s\n", path, err)
 			}
-			user.AddHistory("animeunity", selectedAnime.ID, episode)
+			user.AddHistory("animeunity", selectedAnime, episode)
 		}(selectedEpisode)
 	})
 
