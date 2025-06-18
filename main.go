@@ -31,9 +31,6 @@ func main() {
 	fmt.Printf("Loading env file: %s\n", envFile)
 	if _, err := os.Stat(envFile); err == nil {
 		_ = godotenv.Load(envFile)
-	} else {
-		fmt.Printf("Env file not found: %s\n", envFile)
-		return
 	}
 
 	userRootDir := os.Getenv("USER_ROOT_DIR")
