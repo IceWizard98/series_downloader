@@ -104,10 +104,10 @@ func main() {
 	}
 
 	var selectedEpisode models.Episode
-	selectedAnime := animeList[index_selected-1]
+	selectedSerie := animeList[index_selected-1]
 	toContinue := false
 	for _, v := range user.GetHistory() {
-		if v.SerieID == selectedAnime.ID {
+		if v.SerieID == selectedSerie.ID {
 			fmt.Printf("Current episode: %d\n", v.EpisodeNumber)
 			fmt.Println("Do you want to whatch the next episode? (y/n)")
 			reader := bufio.NewReader(os.Stdin)
@@ -128,7 +128,7 @@ func main() {
 
 	var episodes []models.Episode
 	if toContinue {
-		episodes, err = animeUnityInstance.GetEpisodes(selectedAnime)
+		episodes, err = animeUnityInstance.GetEpisodes(selectedSerie)
 		if err != nil {
 			fmt.Printf("Error retriving series \n%s\n", err)
 			return
@@ -147,7 +147,7 @@ func main() {
 		fmt.Printf("Continue watching episode %d\n", selectedEpisode.Number+1)
 		selectedEpisode = episodes[selectedEpisode.Number]
 	} else {
-		episodes, err = animeUnityInstance.GetEpisodes(selectedAnime)
+		episodes, err = animeUnityInstance.GetEpisodes(selectedSerie)
 		if err != nil {
 			fmt.Printf("Error retriving series \n%s\n", err)
 			return
@@ -211,7 +211,7 @@ func main() {
 			if err := open.Run(path); err != nil {
 				fmt.Printf("Error opening file to Play episode %s: \n%s\n", path, err)
 			}
-			user.AddHistory("animeunity", selectedAnime, episode)
+			user.AddHistory("animeunity", selectedSerie, episode)
 		}(selectedEpisode)
 	})
 
@@ -259,7 +259,7 @@ func main() {
 	}
 
 	if *delete_prev {
-		basePath := fmt.Sprintf(user.RootDir+"/%s", selectedAnime.Slug)
+		basePath := fmt.Sprintf(user.RootDir+"/%s", selectedSerie.Slug)
 		files, err := os.ReadDir(basePath)
 		if err != nil {
 			fmt.Printf("Error reading directory %s: \n%s\n", basePath, err)
