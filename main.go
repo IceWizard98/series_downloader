@@ -20,9 +20,9 @@ import (
 )
 
 func main() {
-	serie_title := flag.String("title", "", "Anime title")
-	userName    := flag.String("user", "", "Eser.env file for configuration loading")
-	delete_prev := flag.Bool("delete", false, "Delete previus episodes")
+	series_title := flag.String("title", "", "Series title")
+	userName     := flag.String("user", "", "Eser.env file for configuration loading")
+	delete_prev  := flag.Bool("delete", false, "Delete previus episodes")
 
 	flag.Parse()
 
@@ -49,13 +49,13 @@ func main() {
 	user   := user.GetInstance(*userName, userRootDir)
 
 	fmt.Println(filter.Filter)
-	if *serie_title == "" || len(*serie_title) == 0 {
+	if *series_title == "" || len(*series_title) == 0 {
 		fmt.Println("Please provide an anime title")
 		return
 	}
 
 	animeUnityInstance := animeunity.Init()
-	animeList, err     := animeUnityInstance.Search(*serie_title)
+	animeList, err     := animeUnityInstance.Search(*series_title)
 	if err != nil {
 		fmt.Printf("Error retriving series \n%s\n", err)
 		return
@@ -100,10 +100,10 @@ func main() {
 	}
 
 	var selectedEpisode models.Episode
-	selectedSerie := animeList[index_selected-1]
+	selectedSeries := animeList[index_selected-1]
 	toContinue := false
 	for _, v := range user.GetHistory() {
-		if v.SerieID == selectedSerie.ID {
+		if v.SeriesID == selectedSeries.ID {
 			fmt.Printf("Current episode: %d\n", v.EpisodeNumber)
 			fmt.Println("Do you want to whatch the next episode? (y/n)")
 			reader := bufio.NewReader(os.Stdin)
@@ -124,7 +124,7 @@ func main() {
 
 	var episodes []models.Episode
 	if toContinue {
-		episodes, err = animeUnityInstance.GetEpisodes(selectedSerie)
+		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
 		if err != nil {
 			fmt.Printf("Error retriving series \n%s\n", err)
 			return
@@ -136,14 +136,14 @@ func main() {
 		}
 
 		if uint16(len(episodes)) <= selectedEpisode.Number {
-			fmt.Println("Anime is over, well done!")
+			fmt.Println("Series is over, well done!")
 			return
 		}
 
 		fmt.Printf("Continue watching episode %d\n", selectedEpisode.Number+1)
 		selectedEpisode = episodes[selectedEpisode.Number]
 	} else {
-		episodes, err = animeUnityInstance.GetEpisodes(selectedSerie)
+		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
 		if err != nil {
 			fmt.Printf("Error retriving series \n%s\n", err)
 			return
@@ -207,7 +207,7 @@ func main() {
 			if err := open.Run(path); err != nil {
 				fmt.Printf("Error opening file to Play episode %s: \n%s\n", path, err)
 			}
-			user.AddHistory("animeunity", selectedSerie, episode)
+			user.AddHistory("animeunity", selectedSeries, episode)
 		}(selectedEpisode)
 	})
 
@@ -255,7 +255,7 @@ func main() {
 	}
 
 	if *delete_prev {
-		basePath := fmt.Sprintf(user.RootDir+"/%s", selectedSerie.Slug)
+		basePath := fmt.Sprintf(user.RootDir+"/%s", selectedSeries.Slug)
 		files, err := os.ReadDir(basePath)
 		if err != nil {
 			fmt.Printf("Error reading directory %s: \n%s\n", basePath, err)

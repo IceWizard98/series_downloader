@@ -19,9 +19,9 @@ type user struct {
 
 type userHistory struct {
   Provider      string `json:"provider"`
-  SerieID       string `json:"serie_id"`
-	SerieName     string `json:"serie_name"`
-	SerieSlug     string `json:"serie_slug"`
+  SeriesID       string `json:"series_id"`
+	SeriesName     string `json:"series_name"`
+	SeriesSlug     string `json:"series_slug"`
   EpisodeID     uint   `json:"episode_id"`
 	EpisodeNumber uint16 `json:"episode_number"`
 }
@@ -69,7 +69,7 @@ func (u *user) GetHistory() []userHistory {
 /*
 	Adds a new episode to the user history
 */
-func (u *user) AddHistory(provider string, serie models.Serie, episode models.Episode) {
+func (u *user) AddHistory(provider string, series models.Series, episode models.Episode) {
 
 	if u.history == nil {
 		u.GetHistory()
@@ -78,7 +78,7 @@ func (u *user) AddHistory(provider string, serie models.Serie, episode models.Ep
 	var history *userHistory
 	for i, h := range u.history {
 		if h.Provider  != provider   { continue }
-		if h.SerieID   != serie.ID   { continue }
+		if h.SeriesID   != series.ID   { continue }
 
 		history = &u.history[i]
 		break
@@ -87,9 +87,9 @@ func (u *user) AddHistory(provider string, serie models.Serie, episode models.Ep
 	if history == nil {
 	  history = &userHistory{
 	    Provider      : provider,
-	    SerieID       : serie.ID,
-	    SerieName     : serie.Name,
-			SerieSlug     : serie.Slug,
+	    SeriesID       : series.ID,
+	    SeriesName     : series.Name,
+			SeriesSlug     : series.Slug,
 	    EpisodeID     : episode.ID,
 	    EpisodeNumber : episode.Number,
 	  }

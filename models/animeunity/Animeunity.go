@@ -55,9 +55,9 @@ func Init() *animeUnity {
 
 /*
 	Search for animes by title using the API endpoint
-  The result is a list of models.Serie
+  The result is a list of models.Series
 */
-func (a animeUnity) Search( query string ) ([]models.Serie, error) {
+func (a animeUnity) Search( query string ) ([]models.Series, error) {
 	search        := fmt.Sprintf(`{"title":"%s"}`, query)
 	response, err := a.Client.DoRequest("POST", "/livesearch", search)
 
@@ -67,7 +67,7 @@ func (a animeUnity) Search( query string ) ([]models.Serie, error) {
 	
 	if string(response) == "null" || response == nil {
 		fmt.Println("Response is empty")
-		return make([]models.Serie, 0), nil
+		return make([]models.Series, 0), nil
 	}
 
 	var res map[string]json.RawMessage
@@ -82,9 +82,9 @@ func (a animeUnity) Search( query string ) ([]models.Serie, error) {
 		return nil, fmt.Errorf("error searching for %s: \n%s", query, err)
 	}
 
-	var animeModels []models.Serie
+	var animeModels []models.Series
 	for _, v := range animeList {
-		animeModels = append(animeModels, models.Serie{
+		animeModels = append(animeModels, models.Series{
 			ID:       fmt.Sprintf("%d", v.ID),
 			Name:     v.Name,
 			ImageURL: v.ImageURL,
@@ -100,7 +100,7 @@ func (a animeUnity) Search( query string ) ([]models.Serie, error) {
   Get the anime episodes using the API endpoint
 	The result is a list of models.Episode
 */
-func (a *animeUnity) GetEpisodes( animeModel models.Serie ) ([]models.Episode, error) {
+func (a *animeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, error) {
 	numberId, err := strconv.ParseUint(animeModel.ID, 10, 64); if err != nil {
 		return nil, fmt.Errorf("error parsing id: \n%s", err)
 	}
