@@ -3,6 +3,9 @@ name: Multi-Platform Build and Release
 env:
   GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
+permissions:
+  contents: write
+
 on:
   release:
     types: [published]
@@ -54,22 +57,6 @@ jobs:
             goarch: amd64
             extension: ""
           - goos: darwin
-            goarch: arm64
-            extension: ""
-          
-          # FreeBSD builds
-          - goos: freebsd
-            goarch: amd64
-            extension: ""
-          - goos: freebsd
-            goarch: arm64
-            extension: ""
-          
-          # OpenBSD builds
-          - goos: openbsd
-            goarch: amd64
-            extension: ""
-          - goos: openbsd
             goarch: arm64
             extension: ""
 

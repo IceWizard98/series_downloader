@@ -3,6 +3,9 @@ name: Auto PR Changelog
 env:
   GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
+permissions:
+  contents: write
+
 on:
   pull_request:
     types: [opened]
@@ -27,18 +30,16 @@ jobs:
           const { owner, repo } = context.repo;
           const pr = context.payload.pull_request;
           
-          // Ottieni tutti i commit della PR
           const commits = await github.rest.pulls.listCommits({
             owner,
             repo,
             pull_number: pr.number,
           });
           
-          // Genera il changelog dai commit
           let changelog = "\n\n## 📋 Changelog\n\n";
           
           if (commits.data.length === 0) {
-            changelog += "_Nessun commit trovato._\n";
+            changelog += "_No commits found._\n";
           } else {
             commits.data.forEach((commit, index) => {
               const message = commit.commit.message;
@@ -46,29 +47,23 @@ jobs:
               const author = commit.commit.author.name;
               const date = new Date(commit.commit.author.date).toLocaleDateString('it-IT');
               
-              // Prendi solo la prima riga del messaggio del commit
               const firstLine = message.split('\n')[0];
               
               changelog += `- **${firstLine}** \`${sha}\` - ${author} (${date})\n`;
             });
           }
           
-          // Aggiungi informazioni aggiuntive
-          changelog += `\n_Totale commit: ${commits.data.length}_\n`;
+          changelog += `\n_Tot commit: ${commits.data.length}_\n`;
           
-          // Ottieni la descrizione attuale della PR
           const currentDescription = pr.body || "";
           
-          // Controlla se il changelog è già presente
           if (currentDescription.includes("## 📋 Changelog")) {
-            console.log("Changelog già presente nella PR, skip update");
+            console.log("Changelog already present, skip update");
             return;
           }
           
-          // Combina la descrizione esistente con il changelog
           const newDescription = currentDescription + changelog;
           
-          // Aggiorna la descrizione della PR
           await github.rest.pulls.update({
             owner,
             repo,
@@ -76,7 +71,7 @@ jobs:
             body: newDescription
           });
           
-          console.log(`Changelog aggiunto alla PR #${pr.number}`);
+          console.log(`Changelog added to PR #${pr.number}`);
 
     - name: Add comment with changelog details
       uses: actions/github-script@v7
@@ -85,24 +80,23 @@ jobs:
           const { owner, repo } = context.repo;
           const pr = context.payload.pull_request;
           
-          // Ottieni informazioni sui file modificati
           const files = await github.rest.pulls.listFiles({
             owner,
             repo,
             pull_number: pr.number,
           });
           
-          let fileStats = "\n### 📊 Statistiche modifiche:\n";
-          fileStats += `- **File modificati:** ${files.data.length}\n`;
+          let fileStats = "\n### 📊 Detail:\n";
+          fileStats += `- **Edited files:** ${files.data.length}\n`;
           
           const additions = files.data.reduce((sum, file) => sum + file.additions, 0);
           const deletions = files.data.reduce((sum, file) => sum + file.deletions, 0);
           
-          fileStats += `- **Righe aggiunte:** +${additions}\n`;
-          fileStats += `- **Righe rimosse:** -${deletions}\n`;
+          fileStats += `- **Added rows:** +${additions}\n`;
+          fileStats += `- **Removed rows:** -${deletions}\n`;
           
           if (files.data.length > 0) {
-            fileStats += "\n### 📁 File modificati:\n";
+            fileStats += "\n### 📁 Edited files:\n";
             files.data.slice(0, 10).forEach(file => {
               const status = file.status === 'added' ? '🆕' : 
                            file.status === 'removed' ? '🗑️' : 
@@ -111,7 +105,7 @@ jobs:
             });
             
             if (files.data.length > 10) {
-              fileStats += `\n_... e altri ${files.data.length - 10} file_\n`;
+              fileStats += `\n_... more ${files.data.length - 10} file_\n`;
             }
           }
           
@@ -119,5 +113,6 @@ jobs:
             owner,
             repo,
             issue_number: pr.number,
-            body: `🤖 **Changelog automatico generato!**\n\nLa descrizione della PR è stata aggiornata con il changelog dei commit.${fileStats}`
+            body: `🤖 **Changelog automatically generated!**\n\nPR description have been updated.${fileStats}`
           });
+
