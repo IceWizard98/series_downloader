@@ -27,9 +27,8 @@ func main() {
 	flag.Parse()
 
 	envFile := fmt.Sprintf("%s.env", *userName)
-
-	fmt.Printf("Loading env file: %s\n", envFile)
 	if _, err := os.Stat(envFile); err == nil {
+	  fmt.Printf("Loading env file: %s\n", envFile)
 		_ = godotenv.Load(envFile)
 	}
 
