@@ -187,7 +187,8 @@ func main() {
 			fmt.Println("Continue to watch locally")
 		}
 	} else {
-		episodes, err := animeUnityInstance.GetEpisodes(selectedSeries)
+		var err error
+		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
 		if err != nil {
 			fmt.Printf("⚠️ Error retriving series \n\t- %s\n", err)
 			os.Exit(1)
