@@ -237,9 +237,9 @@ func main() {
 
 	pool.AddTask(func() {
 		func(episode models.Episode) {
+			fmt.Printf("⬇️ Downloading episode %d\n", episode.Number)
 			path, error := animeUnityInstance.DownloadEpisode(episode, user.RootDir)
 
-			fmt.Printf("⬇️ Downloading episode %d\n", episode.Number)
 			if error != nil {
 				fmt.Printf("⚠️ Error downloading episode %d: \n\t- %s\n", episode.Number, error)
 				return
@@ -264,7 +264,7 @@ func main() {
 
 	for _, char := range downloadNextNEpisodes {
 		if !unicode.IsDigit(char) {
-			fmt.Println("Only digit are allowed in DOWNLOAD_NEXT_EPISODES")
+			fmt.Println("⚠️ Only digit are allowed in DOWNLOAD_NEXT_EPISODES\n")
 		}
 	}
 
