@@ -192,13 +192,13 @@ func main() {
 		func(episode models.Episode) {
 			path, error := animeUnityInstance.DownloadEpisode(episode, user.RootDir)
 
-			fmt.Printf("Downloading episode %d", episode.Number)
+			fmt.Printf("⬇️ Downloading episode %d", episode.Number)
 			if error != nil {
 				fmt.Printf("Error downloading episode %d: \n\t- %s\n", episode.Number, error)
 				return
 			}
 
-			fmt.Printf("Episode downloaded: %d\n", episode.Number)
+			fmt.Printf("✅ Episode downloaded: %d\n", episode.Number)
 			stat, err := os.Stat(path)
 			if err != nil || stat.Size() <= 0 || stat.IsDir() {
 				fmt.Printf("Error reading file to Play episode %s: \nerror %s\nsize %d\n", path, err, stat.Size())
@@ -233,7 +233,7 @@ func main() {
 		if uint16(len(episodes)) > selectedEpisode.Number+iterator {
 			pool.AddTask(func() {
 				episode := episodes[selectedEpisode.Number+iterator]
-				fmt.Printf("Downloading episode %d\n", episode.Number)
+				fmt.Printf("⬇️ Downloading episode %d\n", episode.Number)
 
 				_, error := animeUnityInstance.DownloadEpisode(episode, user.RootDir)
 
@@ -242,7 +242,7 @@ func main() {
 					return
 				}
 
-				fmt.Printf("Episode downloaded: %d\n", episode.Number)
+				fmt.Printf("✅ Episode downloaded: %d\n", episode.Number)
 			})
 		} else {
 			break
