@@ -28,7 +28,7 @@ type userHistory struct {
 }
 
 const (
-	HISTORY_FILE = "/history.json"
+	HISTORY_FILE = "/.history"
 )
 
 func GetInstance(name string, rootDir string) *user {

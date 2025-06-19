@@ -72,8 +72,15 @@ func main() {
 	list         := flag.Bool("list", false, "Show list of following series")
 
 	flag.Parse()
+	userHomeDir, err := os.UserHomeDir()
 
-	envFile := fmt.Sprintf("%s.env", *userName)
+	if err != nil {
+		fmt.Println("⚠️ Error retriving user home directory")
+		userHomeDir = "."
+	}
+	userHomeDir += "/.series_downloader"
+
+	envFile := fmt.Sprintf("%s/.%s.env", userHomeDir, *userName)
 	if _, err := os.Stat(envFile); err == nil {
 	  fmt.Printf("Loading env file: %s\n", envFile)
 		_ = godotenv.Load(envFile)
@@ -82,14 +89,7 @@ func main() {
 	userRootDir := os.Getenv("USER_ROOT_DIR")
 
 	if userRootDir == "" {
-		userDir, err := os.UserHomeDir()
-
-		if err != nil {
-			fmt.Println("⚠️ Error retriving user home directory")
-			os.Exit(1)
-		}
-		userRootDir = userDir + "/.series_downloader"
-
+		userRootDir = userHomeDir + "/.series_downloader"
 	}
 
 	bloomfilter.GetInstance()
