@@ -19,10 +19,57 @@ import (
 	"github.com/joho/godotenv"
 )
 
+func searchForSeries(animeUnityInstance *animeunity.AnimeUnity, title string) (models.Series, error) {
+	if title == "" || len(title) == 0 {
+		return models.Series{}, fmt.Errorf("Please provide sires title with --title flag")
+	}
+
+	seriesList, err := animeUnityInstance.Search(title)
+	if err != nil {
+		return models.Series{}, fmt.Errorf("⚠️ Error retriving series \n\t- %s\n", err)
+	}
+
+	if len(seriesList) == 0 {
+		return models.Series{}, fmt.Errorf("No results found")
+	}
+
+	for i, v := range seriesList {
+		fmt.Printf("%d - %s\n", i+1, v.Slug)
+	}
+
+	fmt.Println("Select a series")
+	reader := bufio.NewReader(os.Stdin)
+
+	selected, _ := reader.ReadString('\n')
+	selected = strings.TrimSpace(selected)
+
+	if selected == "" || len(selected) == 0 {
+		return models.Series{}, fmt.Errorf("Invalid selection")
+	}
+
+	for _, char := range selected {
+		if !unicode.IsDigit(char) {
+			return models.Series{}, fmt.Errorf("Only digit are allowed")
+		}
+	}
+
+	index_selected, err := strconv.ParseUint(selected, 10, 16)
+	if err != nil {
+		return models.Series{}, fmt.Errorf("Invalid selection")
+	}
+
+	if index_selected < 1 || uint16(index_selected) > uint16(len(seriesList)) {
+		return models.Series{}, fmt.Errorf("Invalid selection")
+	}
+
+	return seriesList[index_selected-1], nil
+}
+
 func main() {
 	series_title := flag.String("title", "", "Series title")
 	userName     := flag.String("user", "", "User.env file for configuration loading")
 	delete_prev  := flag.Bool("delete", false, "Delete previus episodes")
+	list         := flag.Bool("list", false, "Show list of following series")
 
 	flag.Parse()
 
@@ -38,69 +85,72 @@ func main() {
 		userDir, err := os.UserHomeDir()
 
 		if err != nil {
-			fmt.Println("Error retriving user home directory")
+			fmt.Println("⚠️ Error retriving user home directory")
 			os.Exit(1)
 		}
 		userRootDir = userDir + "/.series_downloader"
 
 	}
 
-	filter := bloomfilter.GetInstance()
-	user   := user.GetInstance(*userName, userRootDir)
+	bloomfilter.GetInstance()
 
-	fmt.Println(filter.Filter)
-	if *series_title == "" || len(*series_title) == 0 {
-		fmt.Println("Please provide an anime title")
-		os.Exit(1)
-	}
+	user := user.GetInstance(*userName, userRootDir)
 
+	var selectedSeries models.Series
 	animeUnityInstance := animeunity.Init()
-	animeList, err     := animeUnityInstance.Search(*series_title)
-	if err != nil {
-		fmt.Printf("Error retriving series \n\t- %s\n", err)
-		os.Exit(1)
-	}
 
-	if len(animeList) == 0 {
-		fmt.Println("No results found")
-		os.Exit(0)
-	}
+	if *list {
+		watchingSeries := user.GetHistory()
+		for i, h := range watchingSeries {
+			fmt.Printf("%d) %s - %s: %d\n", i+1, h.SeriesName, h.SeriesSlug, h.EpisodeNumber)
+		}
 
-	for i, v := range animeList {
-		fmt.Printf("%d - %s\n", i+1, v.Slug)
-	}
+		fmt.Println("Select a series")
+		reader := bufio.NewReader(os.Stdin)
 
-	fmt.Println("Select anime")
-	reader := bufio.NewReader(os.Stdin)
+		selected, _ := reader.ReadString('\n')
+		selected = strings.TrimSpace(selected)
 
-	selected, _ := reader.ReadString('\n')
-	selected = strings.TrimSpace(selected)
+		if selected == "" || len(selected) == 0 {
+			fmt.Printf("⚠️ Invalid selection\n")
+			os.Exit(1)
+		}
 
-	if selected == "" || len(selected) == 0 {
-		fmt.Println("Invalid selection")
-		os.Exit(1)
-	}
+		for _, char := range selected {
+			if !unicode.IsDigit(char) {
+				fmt.Printf("⚠️ Only digit are allowed\n")
+				os.Exit(1)
+			}
+		}
 
-	for _, char := range selected {
-		if !unicode.IsDigit(char) {
-			fmt.Println("Only digit are allowed")
+		index_selected, err := strconv.ParseUint(selected, 10, 16)
+		if err != nil {
+			fmt.Printf("⚠️ Invalid selection\n")
+			os.Exit(1)
+		}
+
+		if index_selected < 1 || uint16(index_selected) > uint16(len(watchingSeries)) {
+			fmt.Printf("⚠️ Invalid selection\n")
+			os.Exit(1)
+		}
+
+		toWatch := watchingSeries[index_selected-1]
+		selectedSeries = models.Series{
+      ID       : toWatch.SeriesID,
+      Name     : toWatch.SeriesName,
+      Slug     : toWatch.SeriesSlug,
+      Episodes : uint(toWatch.SeriesTotEpisodes),
+		}
+	} else {
+		var err error
+
+		if selectedSeries, err = searchForSeries(animeUnityInstance, *series_title); err != nil {
+			fmt.Printf("⚠️ Error retriving series \n\t- %s\n", err)
 			os.Exit(1)
 		}
 	}
 
-	index_selected, err := strconv.ParseUint(selected, 10, 16)
-	if err != nil {
-		fmt.Println("Invalid selection")
-		os.Exit(1)
-	}
-
-	if index_selected < 1 || uint16(index_selected) > uint16(len(animeList)) {
-		fmt.Println("Invalid selection")
-		os.Exit(1)
-	}
-
 	var selectedEpisode models.Episode
-	selectedSeries := animeList[index_selected-1]
 	toContinue := false
 	for _, v := range user.GetHistory() {
 		if v.SeriesID == selectedSeries.ID {
@@ -124,28 +174,22 @@ func main() {
 
 	var episodes []models.Episode
 	if toContinue {
-		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
-		if err != nil {
-			fmt.Printf("Error retriving series \n\t- %s\n", err)
-			os.Exit(1)
-		}
-
-		if len(episodes) == 0 {
-			fmt.Println("No episodes found")
-			os.Exit(0)
-		}
-
-		if uint16(len(episodes)) <= selectedEpisode.Number {
-			fmt.Println("Series is over, well done!")
-			os.Exit(0)
-		}
-
 		fmt.Printf("Continue watching episode %d\n", selectedEpisode.Number+1)
-		selectedEpisode = episodes[selectedEpisode.Number]
-	} else {
+		selectedEpisode = models.Episode{
+			Number: selectedEpisode.Number + 1,
+		}
+
+		var err error
 		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
+
 		if err != nil {
-			fmt.Printf("Error retriving series \n\t- %s\n", err)
+			fmt.Printf("⚠️ Error retriving series \n\t- %s\n", err)
+			fmt.Println("Continue to watch locally")
+		}
+	} else {
+		episodes, err := animeUnityInstance.GetEpisodes(selectedSeries)
+		if err != nil {
+			fmt.Printf("⚠️ Error retriving series \n\t- %s\n", err)
 			os.Exit(1)
 		}
 
@@ -158,8 +202,9 @@ func main() {
 			fmt.Printf("%d - %d\n", i+1, v.Number)
 		}
 
-		selected, _ = reader.ReadString('\n')
-		selected = strings.TrimSpace(selected)
+		reader      := bufio.NewReader(os.Stdin)
+		selected, _ := reader.ReadString('\n')
+		selected     = strings.TrimSpace(selected)
 
 		if selected == "" || len(selected) == 0 {
 			fmt.Println("Invalid selection")
@@ -173,9 +218,10 @@ func main() {
 			}
 		}
 
-		index_selected, err = strconv.ParseUint(selected, 10, 16)
+		index_selected, err := strconv.ParseUint(selected, 10, 16)
 		if err != nil {
-			panic(err)
+			fmt.Println("Invalid selection")
+			os.Exit(1)
 		}
 
 		if index_selected < 1 || uint16(index_selected) > uint16(len(episodes)) {
@@ -192,21 +238,21 @@ func main() {
 		func(episode models.Episode) {
 			path, error := animeUnityInstance.DownloadEpisode(episode, user.RootDir)
 
-			fmt.Printf("⬇️ Downloading episode %d", episode.Number)
+			fmt.Printf("⬇️ Downloading episode %d\n", episode.Number)
 			if error != nil {
-				fmt.Printf("Error downloading episode %d: \n\t- %s\n", episode.Number, error)
+				fmt.Printf("⚠️ Error downloading episode %d: \n\t- %s\n", episode.Number, error)
 				return
 			}
 
 			fmt.Printf("✅ Episode downloaded: %d\n", episode.Number)
 			stat, err := os.Stat(path)
 			if err != nil || stat.Size() <= 0 || stat.IsDir() {
-				fmt.Printf("Error reading file to Play episode %s: \nerror %s\nsize %d\n", path, err, stat.Size())
+				fmt.Printf("⚠️ Error reading file to Play episode %s: \nerror %s\nsize %d\n", path, err, stat.Size())
 				return
 			}
 
 			if err := open.Run(path); err != nil {
-				fmt.Printf("Error opening file to Play episode %s: \n\t- %s\n", path, err)
+				fmt.Printf("⚠️ Error opening file to Play episode %s: \n\t- %s\n", path, err)
 				return
 			}
 			user.AddHistory("animeunity", selectedSeries, episode)
@@ -223,7 +269,7 @@ func main() {
 
 	nextNEpisodes, err := strconv.ParseUint(downloadNextNEpisodes, 10, 16)
 	if err != nil {
-		fmt.Printf("Error parsing %s: %s\n", downloadNextNEpisodes, err)
+		fmt.Printf("⚠️ Error parsing %s: %s\n", downloadNextNEpisodes, err)
 	}
 
 	// The iterator starts at 0, but the first episode has number = 1 and is at index 0 in the slice.
@@ -238,7 +284,7 @@ func main() {
 				_, error := animeUnityInstance.DownloadEpisode(episode, user.RootDir)
 
 				if error != nil {
-					fmt.Printf("Error downloading episode %d: \n\t- %s\n", episode.Number, error)
+					fmt.Printf("⚠️ Error downloading episode %d: \n\t- %s\n", episode.Number, error)
 					return
 				}
 
@@ -253,7 +299,7 @@ func main() {
 		basePath := fmt.Sprintf("%s/%s", user.RootDir, selectedSeries.Slug)
 		files, err := os.ReadDir(basePath)
 		if err != nil {
-			fmt.Printf("Error reading directory to delete %s: \n\t- %s\n", basePath, err)
+			fmt.Printf("⚠️ Error reading directory to delete %s: \n\t- %s\n", basePath, err)
 		} else 
 		{
 		  for _, file := range files {
@@ -261,7 +307,7 @@ func main() {
 		  		func(file os.DirEntry) {
 		  			episodeNumber, err := strconv.Atoi(strings.Split(file.Name(), ".")[0])
 		  			if err != nil {
-		  				fmt.Printf("Error parsing file name to delete %s: \n\t- %s\n", file.Name(), err)
+		  				fmt.Printf("⚠️ Error parsing file name to delete %s: \n\t- %s\n", file.Name(), err)
 		  				return
 		  			}
 
@@ -269,10 +315,10 @@ func main() {
 		  				return
 		  			}
 
-		  			fmt.Printf("Deleting file %s\n", basePath+"/"+file.Name())
+		  			fmt.Printf("❌ Deleting file %s\n", basePath+"/"+file.Name())
 
 		  			if err := os.Remove(basePath + "/" + file.Name()); err != nil {
-		  				fmt.Printf("Error deleting file %s: \n\t- %s\n", basePath+"/"+file.Name(), err)
+		  				fmt.Printf("⚠️ Error deleting file %s: \n\t- %s\n", basePath+"/"+file.Name(), err)
 		  			}
 		  		}(file)
 		  	})

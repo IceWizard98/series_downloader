@@ -19,17 +19,17 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-type animeUnity struct {
+type AnimeUnity struct {
 	Client   *httpclient.APIClient
 	anime    anime
 }
 
 type anime struct {
-	ID          uint      `json:"id"`
-	Name        string    `json:"title_eng"`
-	ImageURL    string    `json:"imageurl"`
-	Episodes    uint      `json:"real_episodes_count"`
-	Slug        string    `json:"slug"`
+	ID          uint   `json:"id"                  `
+	Name        string `json:"title_eng"           `
+	ImageURL    string `json:"imageurl"            `
+	Episodes    uint   `json:"real_episodes_count" `
+	Slug        string `json:"slug"                `
 }
 
 type episode struct {
@@ -39,10 +39,10 @@ type episode struct {
 }
 
 /*
-	Initializes a new animeUnity instance
+	Initializes a new AnimeUnity instance
 */
-func Init() *animeUnity {
-	instance := &animeUnity{}
+func Init() *AnimeUnity {
+	instance := &AnimeUnity{}
 	client, err := httpclient.NewAPIClient("https://www.animeunity.so")
 
 	if err != nil {
@@ -57,7 +57,7 @@ func Init() *animeUnity {
 	Search for animes by title using the API endpoint
   The result is a list of models.Series
 */
-func (a animeUnity) Search( query string ) ([]models.Series, error) {
+func (a AnimeUnity) Search( query string ) ([]models.Series, error) {
 	search        := fmt.Sprintf(`{"title":"%s"}`, query)
 	response, err := a.Client.DoRequest("POST", "/livesearch", search)
 
@@ -96,14 +96,8 @@ func (a animeUnity) Search( query string ) ([]models.Series, error) {
 	return animeModels, nil
 }
 
-/*
-  Get the anime episodes using the API endpoint
-	The result is a list of models.Episode
-*/
-func (a *animeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, error) {
-	numberId, err := strconv.ParseUint(animeModel.ID, 10, 64); if err != nil {
-		return nil, fmt.Errorf("error parsing id: \n\t- %s", err)
-	}
+func (a *AnimeUnity) SetAnime(animeModel models.Series) {
+	numberId, _ := strconv.ParseUint(animeModel.ID, 10, 64)
 
 	a.anime = anime{
 		ID:       uint(numberId),
@@ -112,6 +106,13 @@ func (a *animeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, 
 		Episodes: animeModel.Episodes,
 		Slug:     animeModel.Slug,
 	}
+}
+/*
+  Get the anime episodes using the API endpoint
+	The result is a list of models.Episode
+*/
+func (a *AnimeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, error) {
+	a.SetAnime(animeModel)
 
 	totEpisodes := a.anime.Episodes
 
@@ -185,7 +186,7 @@ func (a *animeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, 
 /*
 	Download an episode using the API endpoint and save it to disk
 */
-func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (string, error) {
+func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (string, error) {
   basePath := fmt.Sprintf(rootDir + "/%s", a.anime.Slug)
 	fileName := fmt.Sprintf("%d.mp4", episode.Number)
 	fullPath := basePath + "/" + fileName
@@ -196,6 +197,18 @@ func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 		if _, err := os.Stat(fullPath); err == nil {
 			return fullPath, nil
 		}
+	}
+
+	if a.anime.ID == 0 {
+		return "", errors.New("anime id is 0")
+	}
+
+	if episode.ID == 0 {
+		return "", errors.New("episode id is 0")
+	}
+
+	if a.anime.Slug == "" {
+		return "", errors.New("anime slug is empty")
 	}
 
   response, err := a.Client.DoRequest("GET", fmt.Sprintf("/anime/%d-%s/%d", a.anime.ID, a.anime.Slug, episode.ID), "")
