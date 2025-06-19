@@ -21,7 +21,7 @@ import (
 
 func main() {
 	series_title := flag.String("title", "", "Series title")
-	userName     := flag.String("user", "", "Eser.env file for configuration loading")
+	userName     := flag.String("user", "", "User.env file for configuration loading")
 	delete_prev  := flag.Bool("delete", false, "Delete previus episodes")
 
 	flag.Parse()
@@ -39,7 +39,7 @@ func main() {
 
 		if err != nil {
 			fmt.Println("Error retriving user home directory")
-			return
+			os.Exit(1)
 		}
 		userRootDir = userDir + "/.series_downloader"
 
@@ -51,19 +51,19 @@ func main() {
 	fmt.Println(filter.Filter)
 	if *series_title == "" || len(*series_title) == 0 {
 		fmt.Println("Please provide an anime title")
-		return
+		os.Exit(1)
 	}
 
 	animeUnityInstance := animeunity.Init()
 	animeList, err     := animeUnityInstance.Search(*series_title)
 	if err != nil {
 		fmt.Printf("Error retriving series \n%s\n", err)
-		return
+		os.Exit(1)
 	}
 
 	if len(animeList) == 0 {
 		fmt.Println("No results found")
-		return
+		os.Exit(0)
 	}
 
 	for i, v := range animeList {
@@ -78,25 +78,25 @@ func main() {
 
 	if selected == "" || len(selected) == 0 {
 		fmt.Println("Invalid selection")
-		return
+		os.Exit(1)
 	}
 
 	for _, char := range selected {
 		if !unicode.IsDigit(char) {
 			fmt.Println("Only digit are allowed")
-			return
+			os.Exit(1)
 		}
 	}
 
 	index_selected, err := strconv.ParseUint(selected, 10, 16)
 	if err != nil {
 		fmt.Println("Invalid selection")
-		return
+		os.Exit(1)
 	}
 
 	if index_selected < 1 || uint16(index_selected) > uint16(len(animeList)) {
 		fmt.Println("Invalid selection")
-		return
+		os.Exit(1)
 	}
 
 	var selectedEpisode models.Episode
@@ -127,17 +127,17 @@ func main() {
 		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
 		if err != nil {
 			fmt.Printf("Error retriving series \n%s\n", err)
-			return
+			os.Exit(1)
 		}
 
 		if len(episodes) == 0 {
 			fmt.Println("No episodes found")
-			return
+			os.Exit(0)
 		}
 
 		if uint16(len(episodes)) <= selectedEpisode.Number {
 			fmt.Println("Series is over, well done!")
-			return
+			os.Exit(0)
 		}
 
 		fmt.Printf("Continue watching episode %d\n", selectedEpisode.Number+1)
@@ -146,12 +146,12 @@ func main() {
 		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
 		if err != nil {
 			fmt.Printf("Error retriving series \n%s\n", err)
-			return
+			os.Exit(1)
 		}
 
 		if len(episodes) == 0 {
 			fmt.Println("No episodes found")
-			return
+			os.Exit(1)
 		}
 
 		for i, v := range episodes {
@@ -163,13 +163,13 @@ func main() {
 
 		if selected == "" || len(selected) == 0 {
 			fmt.Println("Invalid selection")
-			return
+			os.Exit(1)
 		}
 
 		for _, char := range selected {
 			if !unicode.IsDigit(char) {
 				fmt.Println("Only digit are allowed")
-				return
+				os.Exit(1)
 			}
 		}
 
@@ -180,7 +180,7 @@ func main() {
 
 		if index_selected < 1 || uint16(index_selected) > uint16(len(episodes)) {
 			fmt.Println("Invalid selection")
-			return
+			os.Exit(1)
 		}
 
 		selectedEpisode = episodes[index_selected-1]
@@ -194,14 +194,14 @@ func main() {
 
 			if error != nil {
 				fmt.Printf("Error downloading episode %d: \n%s\n", episode.Number, error)
-				return
+				os.Exit(1)
 			}
 
 			fmt.Printf("Episode downloaded: %d\n", episode.Number)
 			stat, err := os.Stat(path)
 			if err != nil || stat.Size() <= 0 || stat.IsDir() {
 				fmt.Printf("Error reading file to Play episode %s: \nerror %s\nsize %d\n", path, err, stat.Size())
-				return
+				os.Exit(1)
 			}
 
 			if err := open.Run(path); err != nil {
@@ -215,14 +215,14 @@ func main() {
 
 	if downloadNextNEpisodes == "" || len(downloadNextNEpisodes) == 0 {
 		pool.Wait()
-		return
+		os.Exit(0)
 	}
 
 	for _, char := range downloadNextNEpisodes {
 		if !unicode.IsDigit(char) {
 			fmt.Println("Only digit are allowed in DOWNLOAD_NEXT_EPISODES")
 			pool.Wait()
-			return
+			os.Exit(1)
 		}
 	}
 
