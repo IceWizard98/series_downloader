@@ -101,6 +101,12 @@ func main() {
 
 	if *list {
 		watchingSeries := user.GetHistory()
+
+		if len(watchingSeries) == 0 {
+			fmt.Println("You are not watching any series")
+			os.Exit(1)
+		}
+
 		for i, h := range watchingSeries {
 			fmt.Printf("%d) %s - %s: %d\n", i+1, h.SeriesName, h.SeriesSlug, h.EpisodeNumber)
 		}
