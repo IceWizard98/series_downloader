@@ -57,7 +57,7 @@ func main() {
 	animeUnityInstance := animeunity.Init()
 	animeList, err     := animeUnityInstance.Search(*series_title)
 	if err != nil {
-		fmt.Printf("Error retriving series \n%s\n", err)
+		fmt.Printf("Error retriving series \n\t- %s\n", err)
 		os.Exit(1)
 	}
 
@@ -126,7 +126,7 @@ func main() {
 	if toContinue {
 		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
 		if err != nil {
-			fmt.Printf("Error retriving series \n%s\n", err)
+			fmt.Printf("Error retriving series \n\t- %s\n", err)
 			os.Exit(1)
 		}
 
@@ -145,7 +145,7 @@ func main() {
 	} else {
 		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
 		if err != nil {
-			fmt.Printf("Error retriving series \n%s\n", err)
+			fmt.Printf("Error retriving series \n\t- %s\n", err)
 			os.Exit(1)
 		}
 
@@ -192,20 +192,22 @@ func main() {
 		func(episode models.Episode) {
 			path, error := animeUnityInstance.DownloadEpisode(episode, user.RootDir)
 
+			fmt.Printf("Downloading episode %d", episode.Number)
 			if error != nil {
-				fmt.Printf("Error downloading episode %d: \n%s\n", episode.Number, error)
-				os.Exit(1)
+				fmt.Printf("Error downloading episode %d: \n\t- %s\n", episode.Number, error)
+				return
 			}
 
 			fmt.Printf("Episode downloaded: %d\n", episode.Number)
 			stat, err := os.Stat(path)
 			if err != nil || stat.Size() <= 0 || stat.IsDir() {
 				fmt.Printf("Error reading file to Play episode %s: \nerror %s\nsize %d\n", path, err, stat.Size())
-				os.Exit(1)
+				return
 			}
 
 			if err := open.Run(path); err != nil {
-				fmt.Printf("Error opening file to Play episode %s: \n%s\n", path, err)
+				fmt.Printf("Error opening file to Play episode %s: \n\t- %s\n", path, err)
+				return
 			}
 			user.AddHistory("animeunity", selectedSeries, episode)
 		}(selectedEpisode)
@@ -213,16 +215,9 @@ func main() {
 
 	downloadNextNEpisodes := os.Getenv("DOWNLOAD_NEXT_EPISODES")
 
-	if downloadNextNEpisodes == "" || len(downloadNextNEpisodes) == 0 {
-		pool.Wait()
-		os.Exit(0)
-	}
-
 	for _, char := range downloadNextNEpisodes {
 		if !unicode.IsDigit(char) {
 			fmt.Println("Only digit are allowed in DOWNLOAD_NEXT_EPISODES")
-			pool.Wait()
-			os.Exit(1)
 		}
 	}
 
@@ -238,12 +233,12 @@ func main() {
 		if uint16(len(episodes)) > selectedEpisode.Number+iterator {
 			pool.AddTask(func() {
 				episode := episodes[selectedEpisode.Number+iterator]
-				// fmt.Printf("Downloading episode %d\n", episode.Number)
+				fmt.Printf("Downloading episode %d\n", episode.Number)
 
 				_, error := animeUnityInstance.DownloadEpisode(episode, user.RootDir)
 
 				if error != nil {
-					fmt.Printf("Error downloading episode %d: \n%s\n", episode.Number, error)
+					fmt.Printf("Error downloading episode %d: \n\t- %s\n", episode.Number, error)
 					return
 				}
 
@@ -255,33 +250,35 @@ func main() {
 	}
 
 	if *delete_prev {
-		basePath := fmt.Sprintf(user.RootDir+"/%s", selectedSeries.Slug)
+		basePath := fmt.Sprintf("%s/%s", user.RootDir, selectedSeries.Slug)
 		files, err := os.ReadDir(basePath)
 		if err != nil {
-			fmt.Printf("Error reading directory %s: \n%s\n", basePath, err)
+			fmt.Printf("Error reading directory to delete %s: \n\t- %s\n", basePath, err)
+		} else 
+		{
+		  for _, file := range files {
+		  	pool.AddTask(func() {
+		  		func(file os.DirEntry) {
+		  			episodeNumber, err := strconv.Atoi(strings.Split(file.Name(), ".")[0])
+		  			if err != nil {
+		  				fmt.Printf("Error parsing file name to delete %s: \n\t- %s\n", file.Name(), err)
+		  				return
+		  			}
+
+		  			if episodeNumber >= int(selectedEpisode.Number) {
+		  				return
+		  			}
+
+		  			fmt.Printf("Deleting file %s\n", basePath+"/"+file.Name())
+
+		  			if err := os.Remove(basePath + "/" + file.Name()); err != nil {
+		  				fmt.Printf("Error deleting file %s: \n\t- %s\n", basePath+"/"+file.Name(), err)
+		  			}
+		  		}(file)
+		  	})
+		  }
 		}
 
-		for _, file := range files {
-			pool.AddTask(func() {
-				func(file os.DirEntry) {
-					episodeNumber, err := strconv.Atoi(strings.Split(file.Name(), ".")[0])
-					if err != nil {
-						fmt.Printf("Error parsing file name %s: \n%s\n", file.Name(), err)
-						return
-					}
-
-					if episodeNumber >= int(selectedEpisode.Number) {
-						return
-					}
-
-					fmt.Printf("Deleting file %s\n", basePath+"/"+file.Name())
-
-					if err := os.Remove(basePath + "/" + file.Name()); err != nil {
-						fmt.Printf("Error deleting file %s: \n%s\n", basePath+"/"+file.Name(), err)
-					}
-				}(file)
-			})
-		}
 	}
 
 	pool.Wait()
