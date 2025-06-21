@@ -1,6 +1,6 @@
 package models
 
-type Serie struct {
+type Series struct {
 	ID       string  
 	Name     string
 	ImageURL string

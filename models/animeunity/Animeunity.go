@@ -19,17 +19,17 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-type animeUnity struct {
+type AnimeUnity struct {
 	Client   *httpclient.APIClient
 	anime    anime
 }
 
 type anime struct {
-	ID          uint      `json:"id"`
-	Name        string    `json:"title_eng"`
-	ImageURL    string    `json:"imageurl"`
-	Episodes    uint      `json:"real_episodes_count"`
-	Slug        string    `json:"slug"`
+	ID          uint   `json:"id"                  `
+	Name        string `json:"title_eng"           `
+	ImageURL    string `json:"imageurl"            `
+	Episodes    uint   `json:"real_episodes_count" `
+	Slug        string `json:"slug"                `
 }
 
 type episode struct {
@@ -39,10 +39,10 @@ type episode struct {
 }
 
 /*
-	Initializes a new animeUnity instance
+	Initializes a new AnimeUnity instance
 */
-func Init() *animeUnity {
-	instance := &animeUnity{}
+func Init() *AnimeUnity {
+	instance := &AnimeUnity{}
 	client, err := httpclient.NewAPIClient("https://www.animeunity.so")
 
 	if err != nil {
@@ -55,36 +55,36 @@ func Init() *animeUnity {
 
 /*
 	Search for animes by title using the API endpoint
-  The result is a list of models.Serie
+  The result is a list of models.Series
 */
-func (a animeUnity) Search( query string ) ([]models.Serie, error) {
+func (a AnimeUnity) Search( query string ) ([]models.Series, error) {
 	search        := fmt.Sprintf(`{"title":"%s"}`, query)
 	response, err := a.Client.DoRequest("POST", "/livesearch", search)
 
 	if err != nil {
-		return nil, fmt.Errorf("error searching for %s: \n%s", query, err)
+		return nil, fmt.Errorf("error searching for %s: \n\t- %s", query, err)
 	}
 	
 	if string(response) == "null" || response == nil {
 		fmt.Println("Response is empty")
-		return make([]models.Serie, 0), nil
+		return make([]models.Series, 0), nil
 	}
 
 	var res map[string]json.RawMessage
 	err = json.Unmarshal(response, &res)
 	if err != nil {
-		return nil, fmt.Errorf("error searching for %s: \n%s", query, err)
+		return nil, fmt.Errorf("error searching for %s: \n\t- %s", query, err)
 	}
 
 	var animeList []anime
 	err = json.Unmarshal(res["records"], &animeList)
 	if err != nil {
-		return nil, fmt.Errorf("error searching for %s: \n%s", query, err)
+		return nil, fmt.Errorf("error searching for %s: \n\t- %s", query, err)
 	}
 
-	var animeModels []models.Serie
+	var animeModels []models.Series
 	for _, v := range animeList {
-		animeModels = append(animeModels, models.Serie{
+		animeModels = append(animeModels, models.Series{
 			ID:       fmt.Sprintf("%d", v.ID),
 			Name:     v.Name,
 			ImageURL: v.ImageURL,
@@ -96,14 +96,8 @@ func (a animeUnity) Search( query string ) ([]models.Serie, error) {
 	return animeModels, nil
 }
 
-/*
-  Get the anime episodes using the API endpoint
-	The result is a list of models.Episode
-*/
-func (a *animeUnity) GetEpisodes( animeModel models.Serie ) ([]models.Episode, error) {
-	numberId, err := strconv.ParseUint(animeModel.ID, 10, 64); if err != nil {
-		return nil, fmt.Errorf("error parsing id: \n%s", err)
-	}
+func (a *AnimeUnity) SetAnime(animeModel models.Series) {
+	numberId, _ := strconv.ParseUint(animeModel.ID, 10, 64)
 
 	a.anime = anime{
 		ID:       uint(numberId),
@@ -112,6 +106,13 @@ func (a *animeUnity) GetEpisodes( animeModel models.Serie ) ([]models.Episode, e
 		Episodes: animeModel.Episodes,
 		Slug:     animeModel.Slug,
 	}
+}
+/*
+  Get the anime episodes using the API endpoint
+	The result is a list of models.Episode
+*/
+func (a *AnimeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, error) {
+	a.SetAnime(animeModel)
 
 	totEpisodes := a.anime.Episodes
 
@@ -149,13 +150,13 @@ func (a *animeUnity) GetEpisodes( animeModel models.Serie ) ([]models.Episode, e
 	  var resultJson map[string]json.RawMessage
 		err := json.Unmarshal(res, &resultJson)
 	  if err != nil {
-			return nil, fmt.Errorf("on base response unmarshal %s: \n%s", a.anime.Name, err)
+			return nil, fmt.Errorf("on base response unmarshal %s: \n\t- %s", a.anime.Name, err)
 	  }
 
 	  var episodesListChunk []episode
 	  err = json.Unmarshal(resultJson["episodes"], &episodesListChunk)
 	  if err != nil {
-			return nil, fmt.Errorf("on unmarshal episodes %s: \n%s", a.anime.Name, err)
+			return nil, fmt.Errorf("on unmarshal episodes %s: \n\t- %s", a.anime.Name, err)
 	  }
 
 	  for _, v := range episodesListChunk {
@@ -185,7 +186,7 @@ func (a *animeUnity) GetEpisodes( animeModel models.Serie ) ([]models.Episode, e
 /*
 	Download an episode using the API endpoint and save it to disk
 */
-func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (string, error) {
+func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (string, error) {
   basePath := fmt.Sprintf(rootDir + "/%s", a.anime.Slug)
 	fileName := fmt.Sprintf("%d.mp4", episode.Number)
 	fullPath := basePath + "/" + fileName
@@ -196,6 +197,18 @@ func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 		if _, err := os.Stat(fullPath); err == nil {
 			return fullPath, nil
 		}
+	}
+
+	if a.anime.ID == 0 {
+		return "", errors.New("anime id is 0")
+	}
+
+	if episode.ID == 0 {
+		return "", errors.New("episode id is 0")
+	}
+
+	if a.anime.Slug == "" {
+		return "", errors.New("anime slug is empty")
 	}
 
   response, err := a.Client.DoRequest("GET", fmt.Sprintf("/anime/%d-%s/%d", a.anime.ID, a.anime.Slug, episode.ID), "")
@@ -232,19 +245,19 @@ func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 	{
 	  req, err := http.NewRequest("GET", embedUrl, nil)
 	  if err != nil {
-	  	return "", fmt.Errorf("error creating request: \n%s", err) 
+	  	return "", fmt.Errorf("error creating request: \n\t- %s", err) 
 	  }
 
 	  resp, err := http.DefaultClient.Do(req)
 	  if err != nil {
-	  	return "", fmt.Errorf("error doing request: \n%s", err)
+	  	return "", fmt.Errorf("error doing request: \n\t- %s", err)
 	  }
 
 	  defer resp.Body.Close()
 
 		embedHtml, err = io.ReadAll(resp.Body)
 	  if err != nil {
-	  	return "", fmt.Errorf("error reading response: \n%s", err)
+	  	return "", fmt.Errorf("error reading response: \n\t- %s", err)
 	  }
 	}
 
@@ -255,7 +268,7 @@ func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 
 	embedDoc, err := goquery.NewDocumentFromReader( bytes.NewReader(embedHtml) )
 	if err != nil {
-	  return "", fmt.Errorf("error creating document: \n%s", err)
+	  return "", fmt.Errorf("error creating document: \n\t- %s", err)
 	}
 
 	// find the download url and use it to download the episond and saavi it into a file
@@ -277,7 +290,7 @@ func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 	{
     resp, err := http.Get(downloadUrl)
     if err != nil {
-			return "", fmt.Errorf("error getting download url: \n%s", err)
+			return "", fmt.Errorf("error getting download url: \n\t- %s", err)
     }
     defer resp.Body.Close()
 
@@ -287,21 +300,38 @@ func (a animeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 
 		err = os.MkdirAll(basePath, os.ModePerm)
 		if err != nil {
-			return "", fmt.Errorf("error creating directory: \n%s", err)
+			return "", fmt.Errorf("error creating directory: \n\t- %s", err)
 		}
 
-    outFile, err := os.Create(fullPath)
+		downloadError := false
+		for {
+			outFile, err := os.Create(fullPath)
+			defer outFile.Close()
 
-    if err != nil {
-			return "", fmt.Errorf("error creating file: \n%s", err)
-    }
-    defer outFile.Close()
+			if err != nil {
+				err           = fmt.Errorf("error creating file: \n\t- %s", err)
+				downloadError = true
+				break
+			}
 
-    _, err = io.Copy(outFile, resp.Body)
-    if err != nil {
-			return "", fmt.Errorf("error copying file: \n%s", err)
-    }
+			_, err = io.Copy(outFile, resp.Body)
+			if err != nil {
+				err           = fmt.Errorf("error copying file: \n\t- %s", err)
+				downloadError = true
+				break
+			}
+			
+			break
+		}
+
+		if downloadError {
+			if errOs := os.Remove(fullPath); errOs != nil {
+				err = fmt.Errorf("Error deleting file %s: \n\t- %s\n", fullPath, errOs)
+			}
+
+			fullPath = ""
+		}
 	}
 
-	return fullPath, nil
+	return fullPath, err
 }

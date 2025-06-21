@@ -18,14 +18,17 @@ type user struct {
 }
 
 type userHistory struct {
-  Provider      string `json:"provider"`
-  AnimeID       string  `json:"anime_id"`
-  EpisodeID     uint   `json:"episode_id"`
-	EpisodeNumber uint16 `json:"episode_number"`
+  Provider          string `json:"provider"`
+  SeriesID          string `json:"series_id"`
+	SeriesName        string `json:"series_name"`
+	SeriesSlug        string `json:"series_slug"`
+	SeriesTotEpisodes uint16 `json:"series_tot_episodes"`
+  EpisodeID         uint   `json:"episode_id"`
+	EpisodeNumber     uint16 `json:"episode_number"`
 }
 
 const (
-	HISTORY_FILE = "/history.json"
+	HISTORY_FILE = "/.history"
 )
 
 func GetInstance(name string, rootDir string) *user {
@@ -67,7 +70,7 @@ func (u *user) GetHistory() []userHistory {
 /*
 	Adds a new episode to the user history
 */
-func (u *user) AddHistory(provider string, animeID string, episode models.Episode) {
+func (u *user) AddHistory(provider string, series models.Series, episode models.Episode) {
 
 	if u.history == nil {
 		u.GetHistory()
@@ -76,8 +79,7 @@ func (u *user) AddHistory(provider string, animeID string, episode models.Episod
 	var history *userHistory
 	for i, h := range u.history {
 		if h.Provider  != provider   { continue }
-		if h.AnimeID   != animeID    { continue }
-		if h.EpisodeID == episode.ID { return }
+		if h.SeriesID   != series.ID   { continue }
 
 		history = &u.history[i]
 		break
@@ -85,10 +87,13 @@ func (u *user) AddHistory(provider string, animeID string, episode models.Episod
 
 	if history == nil {
 	  history = &userHistory{
-	  	Provider      : provider,
-	  	AnimeID       : animeID,
-	  	EpisodeID     : episode.ID,
-	  	EpisodeNumber : episode.Number,
+			Provider          : provider,
+			SeriesID          : series.ID,
+			SeriesName        : series.Name,
+			SeriesSlug        : series.Slug,
+			SeriesTotEpisodes : uint16(series.Episodes),
+			EpisodeID         : episode.ID,
+			EpisodeNumber     : episode.Number,
 	  }
 	  u.history = append(u.history, *history)
 	} else {
