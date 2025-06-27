@@ -26,7 +26,7 @@ func searchForSeries(animeUnityInstance *animeunity.AnimeUnity, title string) (m
 
 	seriesList, err := animeUnityInstance.Search(title)
 	if err != nil {
-		return models.Series{}, fmt.Errorf("⚠️ Error retriving series \n\t- %s\n", err)
+		return models.Series{}, err
 	}
 
 	if len(seriesList) == 0 {
@@ -190,14 +190,14 @@ func main() {
 		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
 
 		if err != nil {
-			fmt.Printf("⚠️ Error retriving series \n\t- %s\n", err)
+			fmt.Printf("⚠️ Error retriving episodes \n\t- %s\n", err)
 			fmt.Println("Continue to watch locally")
 		}
 	} else {
 		var err error
 		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
 		if err != nil {
-			fmt.Printf("⚠️ Error retriving series \n\t- %s\n", err)
+			fmt.Printf("⚠️ Error retriving episodes \n\t- %s\n", err)
 			os.Exit(1)
 		}
 
@@ -271,7 +271,7 @@ func main() {
 
 	for _, char := range downloadNextNEpisodes {
 		if !unicode.IsDigit(char) {
-			fmt.Println("⚠️ Only digit are allowed in DOWNLOAD_NEXT_EPISODES\n")
+			fmt.Println("⚠️ Only digit are allowed in DOWNLOAD_NEXT_EPISODES")
 		}
 	}
 

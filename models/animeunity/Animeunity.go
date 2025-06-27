@@ -120,6 +120,13 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, 
 		return make([]models.Episode, 0), nil
 	}
 
+	if !a.Client.Initialized {
+		err := a.Client.Initialize()
+		if err != nil {
+			return nil, fmt.Errorf("error initializing client: \n\t- %s", err)
+		}
+	}
+
 	pool    := routinepoll.GetInstance()
 	ch      := make(chan []byte)
 	errorCh := make(chan error)

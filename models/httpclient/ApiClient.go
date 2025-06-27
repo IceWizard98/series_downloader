@@ -46,7 +46,7 @@ func (a *APIClient) Initialize() error {
 	}
 	
 	if a.CSRFToken == "" {
-		return fmt.Errorf("CSRF token not found")
+		return fmt.Errorf("error initializing client: \n\t- CSRF token not found")
 	}
 	
 	a.Initialized = true
@@ -56,7 +56,7 @@ func (a *APIClient) Initialize() error {
 func (a *APIClient) DoRequest(method, endpoint string, data string) ([]byte, error) {
 	if !a.Initialized {
 		if err := a.Initialize(); err != nil {
-			return nil, fmt.Errorf("error initializing client in do request: \n\t- %s", err)
+			return nil, fmt.Errorf("do request: \n\t- %s", err)
 		}
 	}
 	
@@ -70,7 +70,7 @@ func (a *APIClient) DoRequest(method, endpoint string, data string) ([]byte, err
 	}
 	
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: \n\t- %s", err)
+		return nil, fmt.Errorf("do request: \n\terror creating request: \n\t- %s", err)
 	}
 	
 	if data != "" {
