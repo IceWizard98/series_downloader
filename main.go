@@ -185,6 +185,7 @@ func main() {
 			Number: selectedEpisode.Number + 1,
 		}
 
+		// GET ONLY WHAT NEEDED N = SELECTED.NUMBER
 		var err error
 		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
 

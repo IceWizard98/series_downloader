@@ -120,27 +120,34 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, 
 		return make([]models.Episode, 0), nil
 	}
 
-	pool := routinepoll.GetInstance()
-	ch   := make(chan []byte)
+	pool    := routinepoll.GetInstance()
+	ch      := make(chan []byte)
+	errorCh := make(chan error)
 
 	for i := uint(1); i <= totEpisodes; i += 120 {
 		pool.AddTask( func() {
-			func(ch chan<- []byte, start uint) {
+			func(ch chan<- []byte, errorCh chan<- error, start uint) {
   	    response, err := a.Client.DoRequest("GET", fmt.Sprintf("/info_api/%d/1?start_range=%d&end_range=%d", a.anime.ID, start, start+119), "")
 
   	    if err != nil {
+		    	errorCh <- fmt.Errorf("error searching for %s: \n\t- %s", a.anime.Name, err)
   	    	return
   	    }
   
   	    ch <- response
-			}(ch, i)
+			}(ch, errorCh, i)
 		})
 	}
 
 	go func() {
 		pool.Wait()
     close(ch)
+    close(errorCh)
   }()
+
+	for err := range errorCh {
+		return nil, err
+	}
 
 	var episodesList []models.Episode
 	/*

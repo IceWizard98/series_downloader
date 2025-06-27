@@ -46,7 +46,7 @@ func (a *APIClient) Initialize() error {
 	}
 	
 	if a.CSRFToken == "" {
-		return fmt.Errorf("CSRF token non trovato")
+		return fmt.Errorf("CSRF token not found")
 	}
 	
 	a.Initialized = true
