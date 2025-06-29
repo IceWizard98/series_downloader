@@ -41,16 +41,24 @@ type episode struct {
 /*
 	Initializes a new AnimeUnity instance
 */
-func Init() *AnimeUnity {
+func Init() (*AnimeUnity, error) {
 	instance := &AnimeUnity{}
 	client, err := httpclient.NewAPIClient("https://www.animeunity.so")
 
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("error creating animeunity http client: \n\t- %s", err)
 	}
 	
 	instance.Client = client
-	return instance
+	
+	if !instance.Client.Initialized {
+		err := instance.Client.Initialize()
+		if err != nil {
+			return nil, fmt.Errorf("error initializing animeunity http client: \n\t- %s", err)
+		}
+	}
+
+	return instance, nil
 }
 
 /*
@@ -111,7 +119,7 @@ func (a *AnimeUnity) SetAnime(animeModel models.Series) {
   Get the anime episodes using the API endpoint
 	The result is a list of models.Episode
 */
-func (a *AnimeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, error) {
+func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint ) ([]models.Episode, error) {
 	a.SetAnime(animeModel)
 
 	totEpisodes := a.anime.Episodes
@@ -129,39 +137,41 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, 
 
 	pool    := routinepoll.GetInstance()
 	ch      := make(chan []byte)
-	errorCh := make(chan error)
 
-	for i := uint(1); i <= totEpisodes; i += 120 {
+	if end > totEpisodes || end == 0 {
+		end = totEpisodes
+	}
+
+	for i := start; i <= end; i += 120 {
 		pool.AddTask( func() {
-			func(ch chan<- []byte, errorCh chan<- error, start uint) {
+			func(ch chan<- []byte, start uint) {
   	    response, err := a.Client.DoRequest("GET", fmt.Sprintf("/info_api/%d/1?start_range=%d&end_range=%d", a.anime.ID, start, start+119), "")
 
   	    if err != nil {
-		    	errorCh <- fmt.Errorf("error searching for %s: \n\t- %s", a.anime.Name, err)
+		    	ch <- []byte("null")
   	    	return
   	    }
   
   	    ch <- response
-			}(ch, errorCh, i)
+			}(ch, i)
 		})
 	}
 
 	go func() {
 		pool.Wait()
     close(ch)
-    close(errorCh)
   }()
-
-	for err := range errorCh {
-		return nil, err
-	}
 
 	var episodesList []models.Episode
 	/*
 		Iterate over the channel to get the episodes and convert them to models.Episode
 	*/
 	for res := range ch {
-	  var resultJson map[string]json.RawMessage
+		if string(res) == "null" || res == nil || len(res) == 0 {
+			return nil, fmt.Errorf("error searching for %s from %d to %d: \n\t- Response is empty", a.anime.Name, start, end)
+		}
+
+		var resultJson map[string]json.RawMessage
 		err := json.Unmarshal(res, &resultJson)
 	  if err != nil {
 			return nil, fmt.Errorf("on base response unmarshal %s: \n\t- %s", a.anime.Name, err)

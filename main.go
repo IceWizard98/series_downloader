@@ -97,7 +97,12 @@ func main() {
 	user := user.GetInstance(*userName, userRootDir)
 
 	var selectedSeries models.Series
-	animeUnityInstance := animeunity.Init()
+	animeUnityInstance, err := animeunity.Init()
+
+	if err != nil {
+		fmt.Printf("⚠️ %s\n", err)
+		os.Exit(1)
+	}
 
 	if *list {
 		watchingSeries := user.GetHistory()
@@ -178,6 +183,20 @@ func main() {
 		}
 	}
 
+	downloadNextNEpisodes := os.Getenv("DOWNLOAD_NEXT_EPISODES")
+
+	for _, char := range downloadNextNEpisodes {
+		if !unicode.IsDigit(char) {
+			fmt.Println("⚠️ Only digit are allowed in DOWNLOAD_NEXT_EPISODES")
+		}
+	}
+
+	nextNEpisodes, err := strconv.ParseUint(downloadNextNEpisodes, 10, 16)
+	if err != nil {
+		fmt.Printf("⚠️ Error parsing %s: %s\n", downloadNextNEpisodes, err)
+	}
+
+	endEpisode := uint(selectedEpisode.Number) + uint(nextNEpisodes)
 	var episodes []models.Episode
 	if toContinue {
 		fmt.Printf("Continue watching episode %d\n", selectedEpisode.Number+1)
@@ -187,7 +206,7 @@ func main() {
 
 		// GET ONLY WHAT NEEDED N = SELECTED.NUMBER
 		var err error
-		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
+		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries, uint(selectedEpisode.Number), endEpisode)
 
 		if err != nil {
 			fmt.Printf("⚠️ Error retriving episodes \n\t- %s\n", err)
@@ -195,7 +214,7 @@ func main() {
 		}
 	} else {
 		var err error
-		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries)
+		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries, uint(selectedEpisode.Number), endEpisode)
 		if err != nil {
 			fmt.Printf("⚠️ Error retriving episodes \n\t- %s\n", err)
 			os.Exit(1)
@@ -267,18 +286,6 @@ func main() {
 		}(selectedEpisode)
 	})
 
-	downloadNextNEpisodes := os.Getenv("DOWNLOAD_NEXT_EPISODES")
-
-	for _, char := range downloadNextNEpisodes {
-		if !unicode.IsDigit(char) {
-			fmt.Println("⚠️ Only digit are allowed in DOWNLOAD_NEXT_EPISODES")
-		}
-	}
-
-	nextNEpisodes, err := strconv.ParseUint(downloadNextNEpisodes, 10, 16)
-	if err != nil {
-		fmt.Printf("⚠️ Error parsing %s: %s\n", downloadNextNEpisodes, err)
-	}
 
 	// The iterator starts at 0, but the first episode has number = 1 and is at index 0 in the slice.
 	// This means we can simply add the iterator to the number of episodes already downloaded —
