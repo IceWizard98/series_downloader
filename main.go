@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -20,8 +21,9 @@ import (
 )
 
 func searchForSeries(animeUnityInstance *animeunity.AnimeUnity, title string) (models.Series, error) {
+
 	if title == "" || len(title) == 0 {
-		return models.Series{}, fmt.Errorf("Please provide sires title with --title flag")
+		return models.Series{}, fmt.Errorf("please provide sires title with --title flag")
 	}
 
 	seriesList, err := animeUnityInstance.Search(title)
@@ -30,7 +32,7 @@ func searchForSeries(animeUnityInstance *animeunity.AnimeUnity, title string) (m
 	}
 
 	if len(seriesList) == 0 {
-		return models.Series{}, fmt.Errorf("No results found")
+		return models.Series{}, fmt.Errorf("no results found")
 	}
 
 	for i, v := range seriesList {
@@ -44,22 +46,22 @@ func searchForSeries(animeUnityInstance *animeunity.AnimeUnity, title string) (m
 	selected = strings.TrimSpace(selected)
 
 	if selected == "" || len(selected) == 0 {
-		return models.Series{}, fmt.Errorf("Invalid selection")
+		return models.Series{}, fmt.Errorf("invalid selection")
 	}
 
 	for _, char := range selected {
 		if !unicode.IsDigit(char) {
-			return models.Series{}, fmt.Errorf("Only digit are allowed")
+			return models.Series{}, fmt.Errorf("only digit are allowed")
 		}
 	}
 
 	index_selected, err := strconv.ParseUint(selected, 10, 16)
 	if err != nil {
-		return models.Series{}, fmt.Errorf("Invalid selection")
+		return models.Series{}, fmt.Errorf("invalid selection")
 	}
 
 	if index_selected < 1 || uint16(index_selected) > uint16(len(seriesList)) {
-		return models.Series{}, fmt.Errorf("Invalid selection")
+		return models.Series{}, fmt.Errorf("invalid selection")
 	}
 
 	return seriesList[index_selected-1], nil
@@ -197,6 +199,7 @@ func main() {
 	}
 
 	endEpisode := uint(selectedEpisode.Number) + uint(nextNEpisodes)
+	fmt.Printf("End episode: %d\n", endEpisode)
 	var episodes []models.Episode
 	if toContinue {
 		fmt.Printf("Continue watching episode %d\n", selectedEpisode.Number+1)
@@ -214,7 +217,7 @@ func main() {
 		}
 	} else {
 		var err error
-		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries, uint(selectedEpisode.Number), endEpisode)
+		episodes, err = animeUnityInstance.GetEpisodes(selectedSeries, 1, math.MaxUint)
 		if err != nil {
 			fmt.Printf("⚠️ Error retriving episodes \n\t- %s\n", err)
 			os.Exit(1)
@@ -290,24 +293,36 @@ func main() {
 	// The iterator starts at 0, but the first episode has number = 1 and is at index 0 in the slice.
 	// This means we can simply add the iterator to the number of episodes already downloaded —
 	// the result will correctly match the index in the slice.
-	for iterator := range uint16(nextNEpisodes) {
-		if uint16(len(episodes)) > selectedEpisode.Number+iterator {
-			pool.AddTask(func() {
-				episode := episodes[selectedEpisode.Number+iterator]
-				fmt.Printf("⬇️ Downloading episode %d\n", episode.Number)
+	fmt.Printf("⬇️ Downloading next %d episodes\n", nextNEpisodes)
 
-				_, error := animeUnityInstance.DownloadEpisode(episode, user.RootDir)
+	downloadNext := pool.AddSubGroup("download_next", uint(nextNEpisodes), 5)
+	defer downloadNext.Close()
 
-				if error != nil {
-					fmt.Printf("⚠️ Error downloading episode %d: \n\t- %s\n", episode.Number, error)
-					return
-				}
+	for _, episode := range episodes {
 
-				fmt.Printf("✅ Episode downloaded: %d\n", episode.Number)
-			})
-		} else {
+		if episode.Number == selectedEpisode.Number || episode.Number < selectedEpisode.Number {
+			continue
+		}
+
+		if uint(episode.Number) > endEpisode || nextNEpisodes == 0 {
 			break
 		}
+
+		ep := episode
+		downloadNext.AddTask(func() {
+			fmt.Printf("⬇️ Downloading episode %d\n", ep.Number)
+
+			_, error := animeUnityInstance.DownloadEpisode(ep, user.RootDir)
+
+			if error != nil {
+				fmt.Printf("⚠️ Error downloading episode %d: \n\t- %s\n", ep.Number, error)
+				return
+			}
+
+			fmt.Printf("✅ Episode downloaded: %d\n", ep.Number)
+		})
+
+		nextNEpisodes--
 	}
 
 	if *delete_prev {
@@ -315,33 +330,33 @@ func main() {
 		files, err := os.ReadDir(basePath)
 		if err != nil {
 			fmt.Printf("⚠️ Error reading directory to delete %s: \n\t- %s\n", basePath, err)
-		} else 
-		{
+		} else {
+			deletePrev := pool.AddSubGroup("delete_prev", uint(len(files)), 1)
+			defer deletePrev.Close()
 		  for _, file := range files {
-		  	pool.AddTask(func() {
-		  		func(file os.DirEntry) {
-		  			episodeNumber, err := strconv.Atoi(strings.Split(file.Name(), ".")[0])
-		  			if err != nil {
-		  				fmt.Printf("⚠️ Error parsing file name to delete %s: \n\t- %s\n", file.Name(), err)
-		  				return
-		  			}
+				f := file
+		  	deletePrev.AddTask(func() {
+					episodeNumber, err := strconv.Atoi(strings.Split(f.Name(), ".")[0])
+					if err != nil {
+						fmt.Printf("⚠️ Error parsing file name to delete %s: \n\t- %s\n", f.Name(), err)
+						return
+					}
 
-		  			if episodeNumber >= int(selectedEpisode.Number) {
-		  				return
-		  			}
+					if episodeNumber >= int(selectedEpisode.Number) {
+						return
+					}
 
-		  			fmt.Printf("❌ Deleting file %s\n", basePath+"/"+file.Name())
+					fmt.Printf("❌ Deleting file %s\n", basePath+"/"+f.Name())
 
-		  			if err := os.Remove(basePath + "/" + file.Name()); err != nil {
-		  				fmt.Printf("⚠️ Error deleting file %s: \n\t- %s\n", basePath+"/"+file.Name(), err)
-		  			}
-		  		}(file)
+					if err := os.Remove(basePath + "/" + f.Name()); err != nil {
+						fmt.Printf("⚠️ Error deleting file %s: \n\t- %s\n", basePath+"/"+f.Name(), err)
+					}
 		  	})
 		  }
 		}
-
 	}
 
-	pool.Wait()
+	pool.WaitAll()
+
 	// TODO: currently useless but filter must be updated on --serve version
 }

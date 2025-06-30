@@ -135,8 +135,8 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint
 		}
 	}
 
-	pool    := routinepoll.GetInstance()
-	ch      := make(chan []byte)
+	pool := routinepoll.GetInstance()
+	ch   := make(chan []byte)
 
 	if end > totEpisodes || end == 0 {
 		end = totEpisodes
@@ -327,35 +327,34 @@ func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 			return "", fmt.Errorf("error creating directory: \n\t- %s", err)
 		}
 
-		downloadError := false
+		downloadError := error
+
 		for {
 			outFile, err := os.Create(fullPath)
 			defer outFile.Close()
 
 			if err != nil {
-				err           = fmt.Errorf("error creating file: \n\t- %s", err)
-				downloadError = true
+				downloadError = fmt.Errorf("error creating file: \n\t- %s", err)
 				break
 			}
 
 			_, err = io.Copy(outFile, resp.Body)
 			if err != nil {
-				err           = fmt.Errorf("error copying file: \n\t- %s", err)
-				downloadError = true
+				downloadError = fmt.Errorf("error copying file: \n\t- %s", err)
 				break
 			}
 			
 			break
 		}
 
-		if downloadError {
+		if downloadError != nil {
 			if errOs := os.Remove(fullPath); errOs != nil {
-				err = fmt.Errorf("Error deleting file %s: \n\t- %s\n", fullPath, errOs)
+				return "",  fmt.Errorf("error deleting file %s: \n\t- %s\n\t- %s", fullPath, errOs, downloadError)
 			}
 
-			fullPath = ""
+			return "", downloadError
 		}
 	}
 
-	return fullPath, err
+	return fullPath, nil
 }

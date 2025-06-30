@@ -40,7 +40,7 @@ func GetInstance(name string, rootDir string) *user {
 	}
 
 	bloomFilter := bloomfilter.GetInstance()
-  filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil { return err }
 
 		if !d.IsDir() { bloomFilter.Add([]byte(path)) }
@@ -60,7 +60,7 @@ func (u *user) GetHistory() []userHistory {
 	  if _, err := os.Stat(u.RootDir + HISTORY_FILE); err == nil {
 	  	jsonHistory, _ := os.ReadFile(u.RootDir + HISTORY_FILE)
 
-	  	json.Unmarshal(jsonHistory, &u.history)
+			_ = json.Unmarshal(jsonHistory, &u.history)
 	  }
 	}
 
