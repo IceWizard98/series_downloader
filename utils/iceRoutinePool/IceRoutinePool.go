@@ -82,7 +82,7 @@ func (i *IceRoutinePool) GetSubGroup(name []string) *IceRoutinePool {
 		return i
 	}
 
-	if len(name) > 0 {
+	if len(name) > 1 {
 		return subGroup.GetSubGroup(name[1:])
 	}
 
