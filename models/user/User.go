@@ -2,11 +2,13 @@ package user
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/IceWizard98/series_downloader/models"
 	bloomfilter "github.com/IceWizard98/series_downloader/utils/bloomFilter"
+	"github.com/joho/godotenv"
 )
 
 var instance *user
@@ -31,16 +33,46 @@ const (
 	HISTORY_FILE = "/.history"
 )
 
-func GetInstance(name string, rootDir string) *user {
-	if instance == nil {
-		instance = &user{
-			Name:    name,
-			RootDir: rootDir,
+func GetInstance(name string, userName *string) (*user, error) {
+	if instance != nil {
+		return instance, nil
+	}
+
+	userHomeDir, err := os.UserHomeDir()
+
+	if err != nil {
+		userHomeDir = "."
+	}
+	userHomeDir += "/.series_downloader"
+
+	envFile := fmt.Sprintf("%s/.%s.env", userHomeDir, *userName)
+	if _, err := os.Stat(envFile); err == nil {
+		_ = godotenv.Load(envFile)
+	} else {
+		os.MkdirAll(userHomeDir, os.ModePerm)
+		f, err := os.Create(envFile)
+		if err != nil {
+		  return nil, fmt.Errorf("error creating env file: %s", err)
 		}
+		_, _ = f.WriteString("USER_ROOT_DIR=" + userHomeDir + "\n")
+		_, _ = f.WriteString("DOWNLOAD_NEXT_EPISODES=5\n")
+
+		f.Close()
+	}
+
+	userRootDir := os.Getenv("USER_ROOT_DIR")
+
+	if userRootDir == "" {
+		userRootDir = userHomeDir + "/.series_downloader"
+	}
+
+	instance = &user{
+		Name:    name,
+		RootDir: userRootDir,
 	}
 
 	bloomFilter := bloomfilter.GetInstance()
-	_ = filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(userRootDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil { return err }
 
 		if !d.IsDir() { bloomFilter.Add([]byte(path)) }
@@ -48,7 +80,7 @@ func GetInstance(name string, rootDir string) *user {
 		return nil
 	})
 
-	return instance
+	return instance, nil
 }
 /*
   Load from disk and return the user history

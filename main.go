@@ -13,11 +13,8 @@ import (
 	"github.com/IceWizard98/series_downloader/models"
 	"github.com/IceWizard98/series_downloader/models/animeunity"
 	"github.com/IceWizard98/series_downloader/models/user"
-	bloomfilter "github.com/IceWizard98/series_downloader/utils/bloomFilter"
 	"github.com/IceWizard98/series_downloader/utils/routinepoll"
 	"github.com/skratchdot/open-golang/open"
-
-	"github.com/joho/godotenv"
 )
 
 func searchForSeries(animeUnityInstance *animeunity.AnimeUnity, title string) (models.Series, error) {
@@ -74,36 +71,19 @@ func main() {
 	list         := flag.Bool("list", false, "Show list of following series")
 
 	flag.Parse()
-	userHomeDir, err := os.UserHomeDir()
+
+	user, err := user.GetInstance(*userName, *&userName)
 
 	if err != nil {
-		fmt.Println("⚠️ Error retriving user home directory")
-		userHomeDir = "."
+		fmt.Printf("⚠️ %s\n", err)
+		os.Exit(1)
 	}
-	userHomeDir += "/.series_downloader"
-
-	envFile := fmt.Sprintf("%s/.%s.env", userHomeDir, *userName)
-	if _, err := os.Stat(envFile); err == nil {
-	  fmt.Printf("Loading env file: %s\n", envFile)
-		_ = godotenv.Load(envFile)
-	}
-
-	userRootDir := os.Getenv("USER_ROOT_DIR")
-
-	if userRootDir == "" {
-		userRootDir = userHomeDir + "/.series_downloader"
-	}
-
-	bloomfilter.GetInstance()
-
-	user := user.GetInstance(*userName, userRootDir)
 
 	var selectedSeries models.Series
 	animeUnityInstance, err := animeunity.Init()
 
 	if err != nil {
 		fmt.Printf("⚠️ %s\n", err)
-		// os.Exit(1)
 	}
 
 	if *list {
