@@ -20,7 +20,7 @@ import (
 )
 
 type AnimeUnity struct {
-	Client   *httpclient.APIClient
+	client   *httpclient.APIClient
 	anime    anime
 }
 
@@ -43,18 +43,19 @@ type episode struct {
 */
 func Init() (*AnimeUnity, error) {
 	instance := &AnimeUnity{}
-	client, err := httpclient.NewAPIClient("https://www.animeunity.so")
+	client, err := httpclient.NewAPIClient("https://www.animeunity.so", 30)
 
 	if err != nil {
-		return nil, fmt.Errorf("error creating animeunity http client: \n\t- %s", err)
+		return instance, fmt.Errorf("error creating animeunity http client: \n\t- %s", err)
 	}
 	
-	instance.Client = client
+	instance.client = client
 	
-	if !instance.Client.Initialized {
-		err := instance.Client.Initialize()
+	if !instance.client.Initialized {
+		err := instance.client.Initialize()
 		if err != nil {
-			return nil, fmt.Errorf("error initializing animeunity http client: \n\t- %s", err)
+			instance.client = nil
+			return instance, fmt.Errorf("error initializing animeunity http client: \n\t- %s", err)
 		}
 	}
 
@@ -66,8 +67,12 @@ func Init() (*AnimeUnity, error) {
   The result is a list of models.Series
 */
 func (a AnimeUnity) Search( query string ) ([]models.Series, error) {
+	if a.client == nil {
+		return make([]models.Series, 0), nil
+	}
+
 	search        := fmt.Sprintf(`{"title":"%s"}`, query)
-	response, err := a.Client.DoRequest("POST", "/livesearch", search)
+	response, err := a.client.DoRequest("POST", "/livesearch", search)
 
 	if err != nil {
 		return nil, fmt.Errorf("error searching for %s: \n\t- %s", query, err)
@@ -128,8 +133,12 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint
 		return make([]models.Episode, 0), nil
 	}
 
-	if !a.Client.Initialized {
-		err := a.Client.Initialize()
+	if a.client == nil {
+		return make([]models.Episode, 0), nil
+	}
+
+	if !a.client.Initialized {
+		err := a.client.Initialize()
 		if err != nil {
 			return nil, fmt.Errorf("error initializing client: \n\t- %s", err)
 		}
@@ -145,7 +154,7 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint
 	for i := start; i <= end; i += 120 {
 		pool.AddTask( func() {
 			func(ch chan<- []byte, start uint) {
-  	    response, err := a.Client.DoRequest("GET", fmt.Sprintf("/info_api/%d/1?start_range=%d&end_range=%d", a.anime.ID, start, start+119), "")
+  	    response, err := a.client.DoRequest("GET", fmt.Sprintf("/info_api/%d/1?start_range=%d&end_range=%d", a.anime.ID, start, start+119), "")
 
   	    if err != nil {
 		    	ch <- []byte("null")
@@ -235,7 +244,7 @@ func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 		return "", errors.New("anime slug is empty")
 	}
 
-  response, err := a.Client.DoRequest("GET", fmt.Sprintf("/anime/%d-%s/%d", a.anime.ID, a.anime.Slug, episode.ID), "")
+  response, err := a.client.DoRequest("GET", fmt.Sprintf("/anime/%d-%s/%d", a.anime.ID, a.anime.Slug, episode.ID), "")
   if err != nil {
   	return "", err
  	}
