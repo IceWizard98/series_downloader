@@ -7,6 +7,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type APIClient struct {
@@ -16,7 +17,7 @@ type APIClient struct {
 	Initialized bool
 }
 
-func NewAPIClient(baseURL string) (*APIClient, error) {
+func NewAPIClient(baseURL string, timeout uint8) (*APIClient, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating cookie jar: \n\t- %s", err)
@@ -24,7 +25,7 @@ func NewAPIClient(baseURL string) (*APIClient, error) {
 	
 	return &APIClient{
 		BaseURL:   baseURL,
-		Client:    &http.Client{Jar: jar},
+		Client:    &http.Client{Jar: jar, Timeout: time.Duration(timeout) * time.Second},
 		Initialized: false,
 	}, nil
 }
