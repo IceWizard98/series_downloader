@@ -13,7 +13,7 @@ import (
 	"github.com/IceWizard98/series_downloader/models"
 	"github.com/IceWizard98/series_downloader/models/animeunity"
 	"github.com/IceWizard98/series_downloader/models/user"
-	"github.com/IceWizard98/series_downloader/utils/routinepoll"
+	"github.com/IceWizard98/series_downloader/utils/routinepool"
 	"github.com/skratchdot/open-golang/open"
 )
 
@@ -242,7 +242,7 @@ func main() {
 		selectedEpisode = episodes[index_selected-1]
 	}
 
-	pool := routinepoll.GetInstance()
+	pool := routinepool.GetInstance()
 
 	pool.AddTask(func() {
 		func(episode models.Episode) {

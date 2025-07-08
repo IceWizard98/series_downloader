@@ -9,7 +9,7 @@ import (
 
 	"github.com/IceWizard98/series_downloader/models"
 	bloomfilter "github.com/IceWizard98/series_downloader/utils/bloomFilter"
-	"github.com/IceWizard98/series_downloader/utils/routinepoll"
+	"github.com/IceWizard98/series_downloader/utils/routinepool"
 	"github.com/joho/godotenv"
 )
 
@@ -93,7 +93,7 @@ func GetInstance(name string) (*user, error) {
 	  }
 
 	  bloomFilter := bloomfilter.GetInstance()
-	  bloomRP     := routinepoll.GetInstance().AddSubGroup("bloom", 100, 5)
+	  bloomRP     := routinepool.GetInstance().AddSubGroup("bloom", 100, 5)
 
 	  _ = filepath.WalkDir(userRootDir, func(path string, d os.DirEntry, err error) error {
 	  	if err != nil { return err }

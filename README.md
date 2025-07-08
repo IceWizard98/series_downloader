@@ -76,7 +76,7 @@ series_donwloader/
 │   ├── animeunity/         # AnimeUnity API integration
 │   │   └── Animeunity.go   # AnimeUnity client implementation
 ├── utils/
-│   └── routinepoll/        # Thread pool for concurrent downloads
+│   └── routinepool/        # Thread pool for concurrent downloads
 ├── init.go                 # Main application entry point
 ├── go.mod                  # Go module definition
 └── README.md               # This file

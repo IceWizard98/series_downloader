@@ -15,7 +15,7 @@ import (
 	"github.com/IceWizard98/series_downloader/models"
 	"github.com/IceWizard98/series_downloader/models/httpclient"
 	bloomfilter "github.com/IceWizard98/series_downloader/utils/bloomFilter"
-	"github.com/IceWizard98/series_downloader/utils/routinepoll"
+	"github.com/IceWizard98/series_downloader/utils/routinepool"
 	"github.com/PuerkitoBio/goquery"
 )
 
@@ -146,7 +146,7 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint
 		}
 	}
 
-	pool := routinepoll.GetInstance()
+	pool := routinepool.GetInstance()
 	ch   := make(chan []byte)
 
 	if end > totEpisodes || end == 0 {
