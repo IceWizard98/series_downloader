@@ -222,7 +222,7 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint
 	Download an episode using the API endpoint and save it to disk
 */
 func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (string, error) {
-  basePath := fmt.Sprintf(rootDir + "/%s", a.anime.Slug)
+  basePath := fmt.Sprintf("%s/%s", rootDir, a.anime.Slug)
 	fileName := fmt.Sprintf("%d.mp4", episode.Number)
 	fullPath := basePath + "/" + fileName
 
