@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/IceWizard98/series_downloader/models"
 	bloomfilter "github.com/IceWizard98/series_downloader/utils/bloomFilter"
@@ -12,7 +13,11 @@ import (
 	"github.com/joho/godotenv"
 )
 
-var instance *user
+var (
+	instance *user
+	once     sync.Once
+	initErr  error
+)
 
 type user struct {
 	Name    string
@@ -35,60 +40,75 @@ const (
 )
 
 func GetInstance(name string) (*user, error) {
-	if instance != nil {
-		return instance, nil
-	}
+	once.Do(func() {
+	  userHomeDir, err := os.UserHomeDir()
 
-	userHomeDir, err := os.UserHomeDir()
+	  if err != nil {
+	  	userHomeDir = "."
+	  }
 
-	if err != nil {
-		userHomeDir = "."
-	}
+	  userHomeDir += "/.series_downloader"
 
-	userHomeDir += "/.series_downloader"
+	  envFile := fmt.Sprintf("%s/.%s.env", userHomeDir, name)
+	  if _, err := os.Stat(envFile); err != nil {
+			if err := os.MkdirAll(userHomeDir, os.ModePerm); err != nil {
+				initErr = fmt.Errorf("error creating directory: %w", err)
+				return
+			}
+			
+			f, err := os.Create(envFile)
+			if err != nil {
+				initErr = fmt.Errorf("error creating env file: %w", err)
+				return
+			}
+			defer f.Close()
+			
+			data := []string{
+				"USER_ROOT_DIR=" + userHomeDir + "\n",
+				"DOWNLOAD_NEXT_EPISODES=5\n",
+			}
 
-	envFile := fmt.Sprintf("%s/.%s.env", userHomeDir, name)
-	if _, err := os.Stat(envFile); err == nil {
-		_ = godotenv.Load(envFile)
-	} else {
-		os.MkdirAll(userHomeDir, os.ModePerm)
-		f, err := os.Create(envFile)
-		if err != nil {
-		  return nil, fmt.Errorf("error creating env file: %s", err)
-		}
-		_, _ = f.WriteString("USER_ROOT_DIR=" + userHomeDir + "\n")
-		_, _ = f.WriteString("DOWNLOAD_NEXT_EPISODES=5\n")
+			for _, d := range data {
+				if _, err := f.WriteString(d); err != nil {
+					initErr = fmt.Errorf("error writing to env file: %w", err)
+					return
+				}
+			}
+	  }
 
-		f.Close()
-	}
-
-	userRootDir := os.Getenv("USER_ROOT_DIR")
-
-	if userRootDir == "" {
-		userRootDir = userHomeDir + "/.series_downloader"
-	}
-
-	instance = &user{
-		Name:    name,
-		RootDir: userRootDir,
-	}
-
-	bloomFilter := bloomfilter.GetInstance()
-	bloomRP     := routinepoll.GetInstance().AddSubGroup("bloom", 100, 5)
-
-	_ = filepath.WalkDir(userRootDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil { return err }
-
-		if !d.IsDir() { 
-		  bloomRP.AddTask(func() {
-				bloomFilter.Add([]byte(path)) 
-		  })
+		if err := godotenv.Load(envFile); err != nil {
+			initErr = fmt.Errorf("error loading newly created env file: %w", err)
+			return
 		}
 
-		return nil
+	  userRootDir := os.Getenv("USER_ROOT_DIR")
+
+	  if userRootDir == "" {
+	  	userRootDir = userHomeDir + "/.series_downloader"
+	  }
+
+	  instance = &user{
+	  	Name:    name,
+	  	RootDir: userRootDir,
+	  }
+
+	  bloomFilter := bloomfilter.GetInstance()
+	  bloomRP     := routinepoll.GetInstance().AddSubGroup("bloom", 100, 5)
+
+	  _ = filepath.WalkDir(userRootDir, func(path string, d os.DirEntry, err error) error {
+	  	if err != nil { return err }
+
+	  	if !d.IsDir() { 
+	  	  bloomRP.AddTask(func() {
+	  			bloomFilter.Add([]byte(path)) 
+	  	  })
+	  	}
+
+	  	return nil
+	  })
 	})
 
-	return instance, nil
+	return instance, initErr
 }
 /*
   Load from disk and return the user history
