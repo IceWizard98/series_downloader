@@ -42,8 +42,10 @@ type episode struct {
 	Initializes a new AnimeUnity instance
 */
 func Init() (*AnimeUnity, error) {
+	fmt.Println("Initializing animeunity")
 	instance := &AnimeUnity{}
-	client, err := httpclient.NewAPIClient("https://www.animeunity.so", 30)
+	//TODO check connection
+	client, err := httpclient.NewAPIClient("https://www.animeunity.so", 5)
 
 	if err != nil {
 		return instance, fmt.Errorf("error creating animeunity http client: \n\t- %s", err)
