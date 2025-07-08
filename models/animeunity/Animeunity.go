@@ -48,7 +48,7 @@ func Init() (*AnimeUnity, error) {
 	client, err := httpclient.NewAPIClient("https://www.animeunity.so", 5)
 
 	if err != nil {
-		return instance, fmt.Errorf("error creating animeunity http client: \n\t- %s", err)
+		return instance, fmt.Errorf("error creating animeunity http client: \n\t- %w", err)
 	}
 	
 	instance.client = client
@@ -57,7 +57,7 @@ func Init() (*AnimeUnity, error) {
 		err := instance.client.Initialize()
 		if err != nil {
 			instance.client = nil
-			return instance, fmt.Errorf("error initializing animeunity http client: \n\t- %s", err)
+			return instance, fmt.Errorf("error initializing animeunity http client: \n\t- %w", err)
 		}
 	}
 
@@ -77,7 +77,7 @@ func (a AnimeUnity) Search( query string ) ([]models.Series, error) {
 	response, err := a.client.DoRequest("POST", "/livesearch", search)
 
 	if err != nil {
-		return nil, fmt.Errorf("error searching for %s: \n\t- %s", query, err)
+		return nil, fmt.Errorf("error searching for %s: \n\t- %w", query, err)
 	}
 	
 	if string(response) == "null" || response == nil {
@@ -88,13 +88,13 @@ func (a AnimeUnity) Search( query string ) ([]models.Series, error) {
 	var res map[string]json.RawMessage
 	err = json.Unmarshal(response, &res)
 	if err != nil {
-		return nil, fmt.Errorf("error searching for %s: \n\t- %s", query, err)
+		return nil, fmt.Errorf("error searching for %s: \n\t- %w", query, err)
 	}
 
 	var animeList []anime
 	err = json.Unmarshal(res["records"], &animeList)
 	if err != nil {
-		return nil, fmt.Errorf("error searching for %s: \n\t- %s", query, err)
+		return nil, fmt.Errorf("error searching for %s: \n\t- %w", query, err)
 	}
 
 	var animeModels []models.Series
@@ -142,7 +142,7 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint
 	if !a.client.Initialized {
 		err := a.client.Initialize()
 		if err != nil {
-			return nil, fmt.Errorf("error initializing client: \n\t- %s", err)
+			return nil, fmt.Errorf("error initializing client: \n\t- %w", err)
 		}
 	}
 
@@ -185,13 +185,13 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint
 		var resultJson map[string]json.RawMessage
 		err := json.Unmarshal(res, &resultJson)
 	  if err != nil {
-			return nil, fmt.Errorf("on base response unmarshal %s: \n\t- %s", a.anime.Name, err)
+			return nil, fmt.Errorf("on base response unmarshal %s: \n\t- %w", a.anime.Name, err)
 	  }
 
 	  var episodesListChunk []episode
 	  err = json.Unmarshal(resultJson["episodes"], &episodesListChunk)
 	  if err != nil {
-			return nil, fmt.Errorf("on unmarshal episodes %s: \n\t- %s", a.anime.Name, err)
+			return nil, fmt.Errorf("on unmarshal episodes %s: \n\t- %w", a.anime.Name, err)
 	  }
 
 	  for _, v := range episodesListChunk {
@@ -280,19 +280,19 @@ func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 	{
 	  req, err := http.NewRequest("GET", embedUrl, nil)
 	  if err != nil {
-	  	return "", fmt.Errorf("error creating request: \n\t- %s", err) 
+	  	return "", fmt.Errorf("error creating request: \n\t- %w", err) 
 	  }
 
 	  resp, err := http.DefaultClient.Do(req)
 	  if err != nil {
-	  	return "", fmt.Errorf("error doing request: \n\t- %s", err)
+	  	return "", fmt.Errorf("error doing request: \n\t- %w", err)
 	  }
 
 	  defer resp.Body.Close()
 
 		embedHtml, err = io.ReadAll(resp.Body)
 	  if err != nil {
-	  	return "", fmt.Errorf("error reading response: \n\t- %s", err)
+	  	return "", fmt.Errorf("error reading response: \n\t- %w", err)
 	  }
 	}
 
@@ -303,7 +303,7 @@ func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 
 	embedDoc, err := goquery.NewDocumentFromReader( bytes.NewReader(embedHtml) )
 	if err != nil {
-	  return "", fmt.Errorf("error creating document: \n\t- %s", err)
+	  return "", fmt.Errorf("error creating document: \n\t- %w", err)
 	}
 
 	// find the download url and use it to download the episond and saavi it into a file
@@ -325,7 +325,7 @@ func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 	{
     resp, err := http.Get(downloadUrl)
     if err != nil {
-			return "", fmt.Errorf("error getting download url: \n\t- %s", err)
+			return "", fmt.Errorf("error getting download url: \n\t- %w", err)
     }
     defer resp.Body.Close()
 
@@ -335,7 +335,7 @@ func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 
 		err = os.MkdirAll(basePath, os.ModePerm)
 		if err != nil {
-			return "", fmt.Errorf("error creating directory: \n\t- %s", err)
+			return "", fmt.Errorf("error creating directory: \n\t- %w", err)
 		}
 
 		downloadError := error
@@ -345,13 +345,13 @@ func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 			defer outFile.Close()
 
 			if err != nil {
-				downloadError = fmt.Errorf("error creating file: \n\t- %s", err)
+				downloadError = fmt.Errorf("error creating file: \n\t- %w", err)
 				break
 			}
 
 			_, err = io.Copy(outFile, resp.Body)
 			if err != nil {
-				downloadError = fmt.Errorf("error copying file: \n\t- %s", err)
+				downloadError = fmt.Errorf("error copying file: \n\t- %w", err)
 				break
 			}
 			
@@ -360,7 +360,7 @@ func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 
 		if downloadError != nil {
 			if errOs := os.Remove(fullPath); errOs != nil {
-				return "",  fmt.Errorf("error deleting file %s: \n\t- %s\n\t- %s", fullPath, errOs, downloadError)
+				return "",  fmt.Errorf("error deleting file %s: \n\t- %s\n\t- %w", fullPath, errOs, downloadError)
 			}
 
 			return "", downloadError

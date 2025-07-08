@@ -20,7 +20,7 @@ type APIClient struct {
 func NewAPIClient(baseURL string, timeout uint8) (*APIClient, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		return nil, fmt.Errorf("error creating cookie jar: \n\t- %s", err)
+		return nil, fmt.Errorf("error creating cookie jar: \n\t- %w", err)
 	}
 	
 	return &APIClient{
@@ -33,7 +33,7 @@ func NewAPIClient(baseURL string, timeout uint8) (*APIClient, error) {
 func (a *APIClient) Initialize() error {
 	resp, err := a.Client.Get(a.BaseURL)
 	if err != nil {
-		return fmt.Errorf("error initializing client: \n\t- %s", err)
+		return fmt.Errorf("error initializing client: \n\t- %w", err)
 	}
 	defer resp.Body.Close()
 	
@@ -57,7 +57,7 @@ func (a *APIClient) Initialize() error {
 func (a *APIClient) DoRequest(method, endpoint string, data string) ([]byte, error) {
 	if !a.Initialized {
 		if err := a.Initialize(); err != nil {
-			return nil, fmt.Errorf("do request: \n\t- %s", err)
+			return nil, fmt.Errorf("do request: \n\t- %w", err)
 		}
 	}
 	
@@ -71,7 +71,7 @@ func (a *APIClient) DoRequest(method, endpoint string, data string) ([]byte, err
 	}
 	
 	if err != nil {
-		return nil, fmt.Errorf("do request: \n\terror creating request: \n\t- %s", err)
+		return nil, fmt.Errorf("do request: \n\terror creating request: \n\t- %w", err)
 	}
 	
 	if data != "" {
@@ -84,13 +84,13 @@ func (a *APIClient) DoRequest(method, endpoint string, data string) ([]byte, err
 	
 	resp, err := a.Client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error doing request: \n\t- %s", err)
+		return nil, fmt.Errorf("error doing request: \n\t- %w", err)
 	}
 	defer resp.Body.Close()
 	
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error reading response body: \n\t- %s", err)
+		return nil, fmt.Errorf("error reading response body: \n\t- %w", err)
 	}
 	
 	return body, nil
