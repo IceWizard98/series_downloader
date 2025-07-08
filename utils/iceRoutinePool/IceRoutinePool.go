@@ -7,10 +7,12 @@ import (
 
 type IceRoutinePool struct {
 	Name string
+	Closed bool
+
 	jobs chan func()
 	wg *sync.WaitGroup
 	ctx context.Context	
-	cancel context.CancelFunc	
+	ctxCancel context.CancelFunc	
 	subGroups map[string]*IceRoutinePool
 }
 
@@ -38,8 +40,9 @@ func New(name string, ctx context.Context, bufferSize uint, concurrentJobs uint)
 		jobs: make(chan func(), bufferSize),
 		wg: &sync.WaitGroup{},
 		ctx: context,
-		cancel: cancel,
+		ctxCancel: cancel,
 		subGroups: make(map[string]*IceRoutinePool),
+		Closed: false,
 	}
 
 	for range concurrentJobs {
@@ -65,6 +68,12 @@ func New(name string, ctx context.Context, bufferSize uint, concurrentJobs uint)
 }
 
 func (i *IceRoutinePool) AddSubGroup(name string, bufferSize uint, concurrentJobs uint) *IceRoutinePool {
+	existing := i.GetSubGroup([]string{name})
+
+	if existing != nil && !existing.Closed{
+		return existing
+	}
+
 	subGroup := New(name, i.ctx, bufferSize, concurrentJobs)
 	i.subGroups[name] = subGroup
 	return subGroup
@@ -79,7 +88,7 @@ func (i *IceRoutinePool) GetSubGroup(name []string) *IceRoutinePool {
 	subGroup, ok := i.subGroups[name[0]]
 
 	if !ok {
-		return i
+		return nil
 	}
 
 	if len(name) > 1 {
@@ -90,11 +99,13 @@ func (i *IceRoutinePool) GetSubGroup(name []string) *IceRoutinePool {
 }
 
 func (i *IceRoutinePool) AddTask(task func()) {
+	// if i.Closed { return } 
 	i.wg.Add(1)
 	i.jobs <- task
 }
 
 func (i *IceRoutinePool) Wait() {
+	if i.Closed { return } 
 	i.wg.Wait()
 }
 
@@ -107,8 +118,10 @@ func (i *IceRoutinePool) WaitAll() {
 }
 
 func (i *IceRoutinePool) Close() {
+	if i.Closed { return } 
 	close(i.jobs)
 	i.Wait()
+	i.Closed = true
 }
 
 func (i *IceRoutinePool) CloseAll() {
@@ -116,13 +129,16 @@ func (i *IceRoutinePool) CloseAll() {
 		sub.CloseAll()
 	}
 	
+	if i.Closed { return } 
 	i.Close()
 }
 
 func (i *IceRoutinePool) Cancel() {
+	if i.Closed { return } 
 	close(i.jobs)
 	i.Wait()
-	i.cancel()
+	i.ctxCancel()
+	i.Closed = true
 }
 
 func (i *IceRoutinePool) CancelAll() {
@@ -131,5 +147,6 @@ func (i *IceRoutinePool) CancelAll() {
 		delete(i.subGroups, nme)
 	}
   
+	if i.Closed { return } 
 	i.Cancel()
 }
