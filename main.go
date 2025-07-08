@@ -72,7 +72,7 @@ func main() {
 
 	flag.Parse()
 
-	user, err := user.GetInstance(*userName, *&userName)
+	user, err := user.GetInstance(*userName)
 
 	if err != nil {
 		fmt.Printf("⚠️ %s\n", err)

@@ -33,7 +33,7 @@ const (
 	HISTORY_FILE = "/.history"
 )
 
-func GetInstance(name string, userName *string) (*user, error) {
+func GetInstance(name string) (*user, error) {
 	if instance != nil {
 		return instance, nil
 	}
@@ -43,9 +43,10 @@ func GetInstance(name string, userName *string) (*user, error) {
 	if err != nil {
 		userHomeDir = "."
 	}
+
 	userHomeDir += "/.series_downloader"
 
-	envFile := fmt.Sprintf("%s/.%s.env", userHomeDir, *userName)
+	envFile := fmt.Sprintf("%s/.%s.env", userHomeDir, name)
 	if _, err := os.Stat(envFile); err == nil {
 		_ = godotenv.Load(envFile)
 	} else {
