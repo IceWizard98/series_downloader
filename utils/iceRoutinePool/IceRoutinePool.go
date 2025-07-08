@@ -6,14 +6,15 @@ import (
 )
 
 type IceRoutinePool struct {
-	Name string
+	Name   string
 	Closed bool
 
-	jobs chan func()
-	wg *sync.WaitGroup
-	ctx context.Context	
+	jobs      chan func()
+	wg        *sync.WaitGroup
+	ctx       context.Context	
 	ctxCancel context.CancelFunc	
 	subGroups map[string]*IceRoutinePool
+	mutex     sync.RWMutex
 }
 
 func New(name string, ctx context.Context, bufferSize uint, concurrentJobs uint) *IceRoutinePool {
@@ -70,7 +71,10 @@ func New(name string, ctx context.Context, bufferSize uint, concurrentJobs uint)
 func (i *IceRoutinePool) AddSubGroup(name string, bufferSize uint, concurrentJobs uint) *IceRoutinePool {
 	existing := i.GetSubGroup([]string{name})
 
-	if existing != nil && !existing.Closed{
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+
+	if existing != nil && !existing.Closed {
 		return existing
 	}
 
@@ -84,6 +88,9 @@ func (i *IceRoutinePool) GetSubGroup(name []string) *IceRoutinePool {
 	if len(name) == 0 {
 		return i
 	}
+
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
 
 	subGroup, ok := i.subGroups[name[0]]
 
@@ -142,6 +149,8 @@ func (i *IceRoutinePool) Cancel() {
 }
 
 func (i *IceRoutinePool) CancelAll() {
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
 	for nme, sub := range i.subGroups {
 		sub.CancelAll()
 		delete(i.subGroups, nme)
