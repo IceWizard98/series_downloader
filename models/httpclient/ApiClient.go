@@ -7,6 +7,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type APIClient struct {
@@ -16,7 +17,7 @@ type APIClient struct {
 	Initialized bool
 }
 
-func NewAPIClient(baseURL string) (*APIClient, error) {
+func NewAPIClient(baseURL string, timeout uint8) (*APIClient, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating cookie jar: \n\t- %s", err)
@@ -24,7 +25,7 @@ func NewAPIClient(baseURL string) (*APIClient, error) {
 	
 	return &APIClient{
 		BaseURL:   baseURL,
-		Client:    &http.Client{Jar: jar},
+		Client:    &http.Client{Jar: jar, Timeout: time.Duration(timeout) * time.Second},
 		Initialized: false,
 	}, nil
 }
@@ -46,7 +47,7 @@ func (a *APIClient) Initialize() error {
 	}
 	
 	if a.CSRFToken == "" {
-		return fmt.Errorf("CSRF token non trovato")
+		return fmt.Errorf("error initializing client: \n\t- CSRF token not found")
 	}
 	
 	a.Initialized = true
@@ -56,7 +57,7 @@ func (a *APIClient) Initialize() error {
 func (a *APIClient) DoRequest(method, endpoint string, data string) ([]byte, error) {
 	if !a.Initialized {
 		if err := a.Initialize(); err != nil {
-			return nil, fmt.Errorf("error initializing client in do request: \n\t- %s", err)
+			return nil, fmt.Errorf("do request: \n\t- %s", err)
 		}
 	}
 	
@@ -70,7 +71,7 @@ func (a *APIClient) DoRequest(method, endpoint string, data string) ([]byte, err
 	}
 	
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: \n\t- %s", err)
+		return nil, fmt.Errorf("do request: \n\terror creating request: \n\t- %s", err)
 	}
 	
 	if data != "" {

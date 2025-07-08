@@ -20,7 +20,7 @@ import (
 )
 
 type AnimeUnity struct {
-	Client   *httpclient.APIClient
+	client   *httpclient.APIClient
 	anime    anime
 }
 
@@ -41,16 +41,27 @@ type episode struct {
 /*
 	Initializes a new AnimeUnity instance
 */
-func Init() *AnimeUnity {
+func Init() (*AnimeUnity, error) {
+	fmt.Println("Initializing animeunity")
 	instance := &AnimeUnity{}
-	client, err := httpclient.NewAPIClient("https://www.animeunity.so")
+	//TODO check connection
+	client, err := httpclient.NewAPIClient("https://www.animeunity.so", 5)
 
 	if err != nil {
-		panic(err)
+		return instance, fmt.Errorf("error creating animeunity http client: \n\t- %s", err)
 	}
 	
-	instance.Client = client
-	return instance
+	instance.client = client
+	
+	if !instance.client.Initialized {
+		err := instance.client.Initialize()
+		if err != nil {
+			instance.client = nil
+			return instance, fmt.Errorf("error initializing animeunity http client: \n\t- %s", err)
+		}
+	}
+
+	return instance, nil
 }
 
 /*
@@ -58,8 +69,12 @@ func Init() *AnimeUnity {
   The result is a list of models.Series
 */
 func (a AnimeUnity) Search( query string ) ([]models.Series, error) {
+	if a.client == nil {
+		return make([]models.Series, 0), nil
+	}
+
 	search        := fmt.Sprintf(`{"title":"%s"}`, query)
-	response, err := a.Client.DoRequest("POST", "/livesearch", search)
+	response, err := a.client.DoRequest("POST", "/livesearch", search)
 
 	if err != nil {
 		return nil, fmt.Errorf("error searching for %s: \n\t- %s", query, err)
@@ -111,7 +126,7 @@ func (a *AnimeUnity) SetAnime(animeModel models.Series) {
   Get the anime episodes using the API endpoint
 	The result is a list of models.Episode
 */
-func (a *AnimeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, error) {
+func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint ) ([]models.Episode, error) {
 	a.SetAnime(animeModel)
 
 	totEpisodes := a.anime.Episodes
@@ -120,15 +135,31 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, 
 		return make([]models.Episode, 0), nil
 	}
 
+	if a.client == nil {
+		return make([]models.Episode, 0), nil
+	}
+
+	if !a.client.Initialized {
+		err := a.client.Initialize()
+		if err != nil {
+			return nil, fmt.Errorf("error initializing client: \n\t- %s", err)
+		}
+	}
+
 	pool := routinepoll.GetInstance()
 	ch   := make(chan []byte)
 
-	for i := uint(1); i <= totEpisodes; i += 120 {
+	if end > totEpisodes || end == 0 {
+		end = totEpisodes
+	}
+
+	for i := start; i <= end; i += 120 {
 		pool.AddTask( func() {
 			func(ch chan<- []byte, start uint) {
-  	    response, err := a.Client.DoRequest("GET", fmt.Sprintf("/info_api/%d/1?start_range=%d&end_range=%d", a.anime.ID, start, start+119), "")
+  	    response, err := a.client.DoRequest("GET", fmt.Sprintf("/info_api/%d/1?start_range=%d&end_range=%d", a.anime.ID, start, start+119), "")
 
   	    if err != nil {
+		    	ch <- []byte("null")
   	    	return
   	    }
   
@@ -147,7 +178,11 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series ) ([]models.Episode, 
 		Iterate over the channel to get the episodes and convert them to models.Episode
 	*/
 	for res := range ch {
-	  var resultJson map[string]json.RawMessage
+		if string(res) == "null" || res == nil || len(res) == 0 {
+			return nil, fmt.Errorf("error searching for %s from %d to %d: \n\t- Response is empty", a.anime.Name, start, end)
+		}
+
+		var resultJson map[string]json.RawMessage
 		err := json.Unmarshal(res, &resultJson)
 	  if err != nil {
 			return nil, fmt.Errorf("on base response unmarshal %s: \n\t- %s", a.anime.Name, err)
@@ -211,7 +246,7 @@ func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 		return "", errors.New("anime slug is empty")
 	}
 
-  response, err := a.Client.DoRequest("GET", fmt.Sprintf("/anime/%d-%s/%d", a.anime.ID, a.anime.Slug, episode.ID), "")
+  response, err := a.client.DoRequest("GET", fmt.Sprintf("/anime/%d-%s/%d", a.anime.ID, a.anime.Slug, episode.ID), "")
   if err != nil {
   	return "", err
  	}
@@ -303,35 +338,34 @@ func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 			return "", fmt.Errorf("error creating directory: \n\t- %s", err)
 		}
 
-		downloadError := false
+		downloadError := error
+
 		for {
 			outFile, err := os.Create(fullPath)
 			defer outFile.Close()
 
 			if err != nil {
-				err           = fmt.Errorf("error creating file: \n\t- %s", err)
-				downloadError = true
+				downloadError = fmt.Errorf("error creating file: \n\t- %s", err)
 				break
 			}
 
 			_, err = io.Copy(outFile, resp.Body)
 			if err != nil {
-				err           = fmt.Errorf("error copying file: \n\t- %s", err)
-				downloadError = true
+				downloadError = fmt.Errorf("error copying file: \n\t- %s", err)
 				break
 			}
 			
 			break
 		}
 
-		if downloadError {
+		if downloadError != nil {
 			if errOs := os.Remove(fullPath); errOs != nil {
-				err = fmt.Errorf("Error deleting file %s: \n\t- %s\n", fullPath, errOs)
+				return "",  fmt.Errorf("error deleting file %s: \n\t- %s\n\t- %s", fullPath, errOs, downloadError)
 			}
 
-			fullPath = ""
+			return "", downloadError
 		}
 	}
 
-	return fullPath, err
+	return fullPath, nil
 }

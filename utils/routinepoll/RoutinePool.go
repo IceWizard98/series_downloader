@@ -4,18 +4,15 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"sync"
 	"unicode"
+
+	"github.com/IceWizard98/series_downloader/utils/iceRoutinePool"
 )
 
-var instance *routinePool
+var instance *iceRoutinePool.IceRoutinePool
 const MAX_CONCURRENT_DOWNLOADS = "5"
-type routinePool struct {
-	jobs chan func()
-  wg *sync.WaitGroup
-}
 
-func GetInstance() *routinePool {
+func GetInstance() *iceRoutinePool.IceRoutinePool {
 	if instance == nil {
 		maxConcurrentDownloads := os.Getenv("MAX_CONCURRENT_DOWNLOADS")
 
@@ -36,29 +33,7 @@ func GetInstance() *routinePool {
 			panic(err)
 		}
 
-		instance = &routinePool{
-			jobs: make(chan func(), poolSize),
-			wg: &sync.WaitGroup{},
-		}
-
-		for range poolSize {
-			go func() {
-				for task := range instance.jobs {
-					task()
-					instance.wg.Done()
-				}
-			}()
-		}
+		instance = iceRoutinePool.New( "main", nil, uint(poolSize), uint(poolSize) )
 	}
 	return instance
 }
-
-func (r *routinePool) AddTask(task func()) {
-	r.wg.Add(1)
-	r.jobs <- task
-}
-
-func (r *routinePool) Wait() {
-	r.wg.Wait()
-}
-
