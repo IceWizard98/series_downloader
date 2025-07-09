@@ -130,13 +130,12 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		nextNEpisodes, err := strconv.ParseUint(downloadNextNEpisodes, 10, 16)
+		nextNEpisodes, err := strconv.ParseInt(downloadNextNEpisodes, 10, 16)
 		if err != nil {
 			fmt.Printf("⚠️ Error parsing %s: %s\n", downloadNextNEpisodes, err)
 		}
 
-		endEpisode := uint(selectedEpisode.Number) + uint(nextNEpisodes)
-		fmt.Printf("End episode: %d\n", endEpisode)
+		endEpisode := uint(selectedEpisode.Number) + uint(nextNEpisodes) + 1
 		var episodes []models.Episode
 		if toContinue {
 			fmt.Printf("Continue watching episode %d\n", selectedEpisode.Number+1)
@@ -241,7 +240,7 @@ var rootCmd = &cobra.Command{
 				continue
 			}
 
-			if uint(episode.Number) > endEpisode || nextNEpisodes == 0 {
+			if uint(episode.Number) > endEpisode || nextNEpisodes < 0 {
 				break
 			}
 
