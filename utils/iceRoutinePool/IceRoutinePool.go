@@ -37,13 +37,13 @@ func New(name string, ctx context.Context, bufferSize uint, concurrentJobs uint)
 	context, cancel := context.WithCancel(ctx)
 
 	instance := &IceRoutinePool{
-		Name: name,
-		jobs: make(chan func(), bufferSize),
-		wg: &sync.WaitGroup{},
-		ctx: context,
-		ctxCancel: cancel,
-		subGroups: make(map[string]*IceRoutinePool),
-		Closed: false,
+		Name      : name,
+		jobs      : make(chan func(), bufferSize),
+		wg        : &sync.WaitGroup{},
+		ctx       : context,
+		ctxCancel : cancel,
+		subGroups : make(map[string]*IceRoutinePool),
+		Closed    : false,
 	}
 
 	for range concurrentJobs {

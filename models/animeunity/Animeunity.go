@@ -43,8 +43,8 @@ type episode struct {
 */
 func Init() (*AnimeUnity, error) {
 	fmt.Println("Initializing animeunity")
+
 	instance := &AnimeUnity{}
-	//TODO check connection
 	client, err := httpclient.NewAPIClient("https://www.animeunity.so", 5)
 
 	if err != nil {
@@ -111,7 +111,11 @@ func (a AnimeUnity) Search( query string ) ([]models.Series, error) {
 	return animeModels, nil
 }
 
-func (a *AnimeUnity) SetAnime(animeModel models.Series) {
+/*
+  Get the anime episodes using the API endpoint
+	The result is a list of models.Episode
+*/
+func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint ) ([]models.Episode, error) {
 	numberId, _ := strconv.ParseUint(animeModel.ID, 10, 64)
 
 	a.anime = anime{
@@ -121,13 +125,6 @@ func (a *AnimeUnity) SetAnime(animeModel models.Series) {
 		Episodes: animeModel.Episodes,
 		Slug:     animeModel.Slug,
 	}
-}
-/*
-  Get the anime episodes using the API endpoint
-	The result is a list of models.Episode
-*/
-func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint ) ([]models.Episode, error) {
-	a.SetAnime(animeModel)
 
 	totEpisodes := a.anime.Episodes
 
@@ -146,7 +143,7 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint
 		}
 	}
 
-	pool := routinepool.GetInstance()
+	pool := routinepool.GetInstance().AddSubGroup("animeunity", 100, 5)
 	ch   := make(chan []byte)
 
 	if end > totEpisodes || end == 0 {
