@@ -22,10 +22,10 @@ var (
 type user struct {
 	Name    string
 	RootDir string
-	history []userHistory
+	history []UserHistory
 }
 
-type userHistory struct {
+type UserHistory struct {
   Provider          string `json:"provider"`
   SeriesID          string `json:"series_id"`
 	SeriesName        string `json:"series_name"`
@@ -113,9 +113,9 @@ func GetInstance(name string) (*user, error) {
 /*
   Load from disk and return the user history
 */
-func (u *user) GetHistory() []userHistory {
+func (u *user) GetHistory() []UserHistory {
 	if u.history == nil {
-		u.history = []userHistory{}
+		u.history = []UserHistory{}
 
 	  if _, err := os.Stat(u.RootDir + HISTORY_FILE); err == nil {
 	  	jsonHistory, _ := os.ReadFile(u.RootDir + HISTORY_FILE)
@@ -136,7 +136,7 @@ func (u *user) AddHistory(provider string, series models.Series, episode models.
 		u.GetHistory()
 	}
 
-	var history *userHistory
+	var history *UserHistory
 	for i, h := range u.history {
 		if h.Provider  != provider   { continue }
 		if h.SeriesID   != series.ID   { continue }
@@ -146,7 +146,7 @@ func (u *user) AddHistory(provider string, series models.Series, episode models.
 	}
 
 	if history == nil {
-	  history = &userHistory{
+	  history = &UserHistory{
 			Provider          : provider,
 			SeriesID          : series.ID,
 			SeriesName        : series.Name,
