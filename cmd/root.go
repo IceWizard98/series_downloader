@@ -11,7 +11,7 @@ import (
 
 	"github.com/IceWizard98/series_downloader/models"
 	"github.com/IceWizard98/series_downloader/models/animeunity"
-	"github.com/IceWizard98/series_downloader/models/user"
+	userPkg "github.com/IceWizard98/series_downloader/models/user"
 	"github.com/IceWizard98/series_downloader/utils/routinepool"
 	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
@@ -29,7 +29,7 @@ var rootCmd = &cobra.Command{
 	Short : "Series Downloader",
 	Long  : "Download series from different providers",
 	Run   : func(cmd *cobra.Command, args []string) {
-		user, err := user.GetInstance(userName)
+		user, err := userPkg.GetInstance(userName)
 
 		if err != nil {
 			fmt.Printf("⚠️ %s\n", err)
@@ -43,7 +43,7 @@ var rootCmd = &cobra.Command{
 			fmt.Printf("⚠️ %s\n", err)
 		}
 
-		if list {
+		if list && series_title == "" {
 			watchingSeries := user.GetHistory()
 
 			if len(watchingSeries) == 0 {
@@ -94,10 +94,56 @@ var rootCmd = &cobra.Command{
 		} else {
 			var err error
 
-			if selectedSeries, err = searchForSeries(animeUnityInstance, series_title); err != nil {
-				fmt.Printf("⚠️ Error retriving series \n\t- %s\n", err)
+			if series_title == "" || len(series_title) == 0 {
+				fmt.Println("please provide sires title with --title flag")
 				os.Exit(1)
 			}
+
+			seriesList, err := animeUnityInstance.Search(series_title)
+			if err != nil {
+				fmt.Printf("⚠️ %s\n", err)
+				os.Exit(1)
+			}
+
+			if len(seriesList) == 0 {
+				fmt.Println("no results found")
+				os.Exit(1)
+			}
+
+			for i, v := range seriesList {
+				fmt.Printf("%d - %s\n", i+1, v.Slug)
+			}
+
+			fmt.Println("Select a series")
+			reader := bufio.NewReader(os.Stdin)
+
+			selected, _ := reader.ReadString('\n')
+			selected = strings.TrimSpace(selected)
+
+			if selected == "" || len(selected) == 0 {
+				fmt.Println("invalid selection")
+				os.Exit(1)
+			}
+
+			for _, char := range selected {
+				if !unicode.IsDigit(char) {
+					fmt.Println("only digit are allowed")
+					os.Exit(1)
+				}
+			}
+
+			index_selected, err := strconv.ParseUint(selected, 10, 16)
+			if err != nil {
+				fmt.Println("invalid selection")
+				os.Exit(1)
+			}
+
+			if index_selected < 1 || uint16(index_selected) > uint16(len(seriesList)) {
+				fmt.Println("invalid selection")
+				os.Exit(1)
+			}
+
+			selectedSeries = seriesList[index_selected-1]
 		}
 
 		var selectedEpisode models.Episode
@@ -138,11 +184,11 @@ var rootCmd = &cobra.Command{
 		endEpisode := uint(selectedEpisode.Number) + uint(nextNEpisodes) + 1
 		var episodes []models.Episode
 		if toContinue {
-			fmt.Printf("Continue watching episode %d\n", selectedEpisode.Number+1)
 			selectedEpisode = models.Episode{
 				Number: selectedEpisode.Number + 1,
 			}
 
+			fmt.Printf("Continue to watch episode %d\n", selectedEpisode.Number)
 			// GET ONLY WHAT NEEDED N = SELECTED.NUMBER
 			var err error
 			episodes, err = animeUnityInstance.GetEpisodes(selectedSeries, uint(selectedEpisode.Number), endEpisode)
@@ -150,6 +196,11 @@ var rootCmd = &cobra.Command{
 			if err != nil {
 				fmt.Printf("⚠️ Error retriving episodes \n\t- %s\n", err)
 				fmt.Println("Continue to watch locally")
+			}
+
+			if len(episodes) == 0 {
+				fmt.Printf("No more episodes to watch\n")
+				os.Exit(0)
 			}
 		} else {
 			var err error
@@ -312,49 +363,3 @@ func Execute() {
 	}
 }
 
-func searchForSeries(animeUnityInstance *animeunity.AnimeUnity, title string) (models.Series, error) {
-
-	if title == "" || len(title) == 0 {
-		return models.Series{}, fmt.Errorf("please provide sires title with --title flag")
-	}
-
-	seriesList, err := animeUnityInstance.Search(title)
-	if err != nil {
-		return models.Series{}, err
-	}
-
-	if len(seriesList) == 0 {
-		return models.Series{}, fmt.Errorf("no results found")
-	}
-
-	for i, v := range seriesList {
-		fmt.Printf("%d - %s\n", i+1, v.Slug)
-	}
-
-	fmt.Println("Select a series")
-	reader := bufio.NewReader(os.Stdin)
-
-	selected, _ := reader.ReadString('\n')
-	selected = strings.TrimSpace(selected)
-
-	if selected == "" || len(selected) == 0 {
-		return models.Series{}, fmt.Errorf("invalid selection")
-	}
-
-	for _, char := range selected {
-		if !unicode.IsDigit(char) {
-			return models.Series{}, fmt.Errorf("only digit are allowed")
-		}
-	}
-
-	index_selected, err := strconv.ParseUint(selected, 10, 16)
-	if err != nil {
-		return models.Series{}, fmt.Errorf("invalid selection")
-	}
-
-	if index_selected < 1 || uint16(index_selected) > uint16(len(seriesList)) {
-		return models.Series{}, fmt.Errorf("invalid selection")
-	}
-
-	return seriesList[index_selected-1], nil
-}
