@@ -223,7 +223,7 @@ func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 	fileName := fmt.Sprintf("%d.mp4", episode.Number)
 	fullPath := basePath + "/" + fileName
 
-	filter := bloomfilter.GetInstance()
+	filter := bloomfilter.GetInstance(100)
 
 	if filter.Contains([]byte(fullPath)) {
 		if _, err := os.Stat(fullPath); err == nil {

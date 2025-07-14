@@ -168,20 +168,10 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		downloadNextNEpisodes := os.Getenv("DOWNLOAD_NEXT_EPISODES")
 
-		for _, char := range downloadNextNEpisodes {
-			if !unicode.IsDigit(char) {
-				fmt.Println("⚠️ Only digit are allowed in DOWNLOAD_NEXT_EPISODES")
-			}
-		}
+		nextNEpisodes := user.NextEpisodes
+		endEpisode    := uint(selectedEpisode.Number) + uint(nextNEpisodes) + 1
 
-		nextNEpisodes, err := strconv.ParseInt(downloadNextNEpisodes, 10, 16)
-		if err != nil {
-			fmt.Printf("⚠️ Error parsing %s: %s\n", downloadNextNEpisodes, err)
-		}
-
-		endEpisode := uint(selectedEpisode.Number) + uint(nextNEpisodes) + 1
 		var episodes []models.Episode
 		if toContinue {
 			selectedEpisode = models.Episode{

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
+	"unicode"
 
 	"github.com/IceWizard98/series_downloader/models"
 	bloomfilter "github.com/IceWizard98/series_downloader/utils/bloomFilter"
@@ -14,15 +16,17 @@ import (
 )
 
 var (
-	instance *user
-	once     sync.Once
-	initErr  error
+	instance    *user
+	once        sync.Once
+	onceHistory sync.Once
+	initErr     error
 )
 
 type user struct {
-	Name    string
-	RootDir string
-	history []UserHistory
+	Name         string
+	RootDir      string
+	NextEpisodes uint8
+	history      []UserHistory
 }
 
 type UserHistory struct {
@@ -88,12 +92,29 @@ func GetInstance(name string) (*user, error) {
 	  }
 
 	  instance = &user{
-	  	Name:    name,
-	  	RootDir: userRootDir,
+			Name         : name,
+			RootDir      : userRootDir,
 	  }
 
-	  bloomFilter := bloomfilter.GetInstance()
-	  bloomRP     := routinepool.GetInstance().AddSubGroup("bloom", 100, 5)
+		userHistory           := instance.GetHistory()
+		downloadNextNEpisodes := os.Getenv("DOWNLOAD_NEXT_EPISODES")
+
+		for _, char := range downloadNextNEpisodes {
+			if !unicode.IsDigit(char) {
+				downloadNextNEpisodes = "5"
+			}
+		}
+
+		nextNEpisodes, err := strconv.ParseInt(downloadNextNEpisodes, 10, 16)
+		if err != nil {
+			nextNEpisodes = 5
+		}
+
+		instance.NextEpisodes = uint8(nextNEpisodes)
+
+		expectedElements := uint32(len(userHistory) * int(nextNEpisodes))
+		bloomFilter      := bloomfilter.GetInstance(expectedElements)
+		bloomRP          := routinepool.GetInstance().AddSubGroup("bloom", uint(expectedElements), 5)
 
 	  _ = filepath.WalkDir(userRootDir, func(path string, d os.DirEntry, err error) error {
 	  	if err != nil { return err }
@@ -114,7 +135,7 @@ func GetInstance(name string) (*user, error) {
   Load from disk and return the user history
 */
 func (u *user) GetHistory() []UserHistory {
-	if u.history == nil {
+	onceHistory.Do(func() {
 		u.history = []UserHistory{}
 
 	  if _, err := os.Stat(u.RootDir + HISTORY_FILE); err == nil {
@@ -122,7 +143,7 @@ func (u *user) GetHistory() []UserHistory {
 
 			_ = json.Unmarshal(jsonHistory, &u.history)
 	  }
-	}
+	})
 
 	return u.history
 }
