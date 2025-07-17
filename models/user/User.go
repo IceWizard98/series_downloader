@@ -112,7 +112,7 @@ func GetInstance(name string) (*user, error) {
 
 		instance.NextEpisodes = uint8(nextNEpisodes)
 
-		expectedElements := uint32(len(userHistory) * int(nextNEpisodes))
+		expectedElements := uint32(len(userHistory) * (int(nextNEpisodes) * 2))
 		bloomFilter      := bloomfilter.GetInstance(expectedElements)
 		bloomRP          := routinepool.GetInstance().AddSubGroup("bloom", uint(expectedElements), 5)
 

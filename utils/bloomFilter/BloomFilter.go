@@ -47,7 +47,7 @@ func (b *bloomFilter) getHashes(value []byte) []uint32 {
 	
 	for i := uint8(0); i < b.hashingFunctions; i++ {
 		generated := h1 + h2*uint32(i)
-		hashes[i] = generated % 32
+		hashes[i] = generated % 64
 	}
 	return hashes
 }
