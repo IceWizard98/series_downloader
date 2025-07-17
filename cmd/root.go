@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"unicode"
 
 	"github.com/IceWizard98/series_downloader/models"
@@ -239,7 +241,16 @@ var rootCmd = &cobra.Command{
 			selectedEpisode = episodes[index_selected-1]
 		}
 
-		pool := routinepool.GetInstance()
+		pool          := routinepool.GetInstance()
+		signalChannel := make(chan os.Signal, 1)
+
+		signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
+
+		go func() {
+			<-signalChannel
+			fmt.Println("\n👋 Closing...")
+			pool.CancelAll() 
+		}()
 
 		pool.AddTask(func() {
 			func(episode models.Episode) {
