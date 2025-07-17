@@ -2,12 +2,14 @@ package iceRoutinePool
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"sync/atomic"
 )
 
 type IceRoutinePool struct {
 	Name   string
-	Closed bool
+	Closed atomic.Bool
 
 	jobs      chan func()
 	wg        *sync.WaitGroup
@@ -43,7 +45,7 @@ func New(name string, ctx context.Context, bufferSize uint, concurrentJobs uint)
 		ctx       : context,
 		ctxCancel : cancel,
 		subGroups : make(map[string]*IceRoutinePool),
-		Closed    : false,
+		Closed    : atomic.Bool{},
 	}
 
 	for range concurrentJobs {
@@ -58,8 +60,10 @@ func New(name string, ctx context.Context, bufferSize uint, concurrentJobs uint)
 						return
 					}
 
-					task()
-					instance.wg.Done()
+					func() {
+						defer instance.wg.Done()
+						task()
+					}()
 				}
 			}
 		}()
@@ -68,13 +72,17 @@ func New(name string, ctx context.Context, bufferSize uint, concurrentJobs uint)
 	return instance
 }
 
+func (i *IceRoutinePool) isClosed() bool {
+	return i.Closed.Load()
+}
+
 func (i *IceRoutinePool) AddSubGroup(name string, bufferSize uint, concurrentJobs uint) *IceRoutinePool {
 	existing := i.GetSubGroup([]string{name})
 
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 
-	if existing != nil && !existing.Closed {
+	if existing != nil && !existing.isClosed() {
 		return existing
 	}
 
@@ -106,56 +114,82 @@ func (i *IceRoutinePool) GetSubGroup(name []string) *IceRoutinePool {
 }
 
 func (i *IceRoutinePool) AddTask(task func()) {
-	// if i.Closed { return } 
+	if i.isClosed() { return } 
 	i.wg.Add(1)
-	i.jobs <- task
+	select {
+	case i.jobs <- task:
+	case <-i.ctx.Done():
+		i.wg.Done() 
+	}
 }
 
 func (i *IceRoutinePool) Wait() {
-	if i.Closed { return } 
+	if i.isClosed() { return } 
 	i.wg.Wait()
 }
 
 func (i *IceRoutinePool) WaitAll() {
+	i.mutex.RLock()
+	subGroups := make([]*IceRoutinePool, 0, len(i.subGroups))
+
 	for _, sub := range i.subGroups {
+		subGroups = append(subGroups, sub)
+	}
+
+	i.mutex.RUnlock()
+
+	for _, sub := range subGroups {
 		sub.WaitAll()
 	}
 
-	i.wg.Wait()
+	i.Wait()
 }
 
 func (i *IceRoutinePool) Close() {
-	if i.Closed { return } 
+	if !i.Closed.CompareAndSwap(false, true) { return } 
 	close(i.jobs)
 	i.Wait()
-	i.Closed = true
 }
 
 func (i *IceRoutinePool) CloseAll() {
+	i.mutex.Lock()
+	subGroups := make([]*IceRoutinePool, 0, len(i.subGroups))
+
 	for _, sub := range i.subGroups {
+		subGroups = append(subGroups, sub)
+	}
+
+	i.mutex.Unlock()
+
+	for _, sub := range subGroups {
 		sub.CloseAll()
 	}
-	
-	if i.Closed { return } 
+
 	i.Close()
 }
 
 func (i *IceRoutinePool) Cancel() {
-	if i.Closed { return } 
+	if i.Closed.CompareAndSwap(false, true) { return } 
+	i.ctxCancel()
 	close(i.jobs)
 	i.Wait()
-	i.ctxCancel()
-	i.Closed = true
+	fmt.Printf("Routine pool cancelled: %s\n", i.Name)
 }
 
 func (i *IceRoutinePool) CancelAll() {
 	i.mutex.Lock()
-	defer i.mutex.Unlock()
-	for nme, sub := range i.subGroups {
-		sub.CancelAll()
-		delete(i.subGroups, nme)
+	subGroups := make([]*IceRoutinePool, 0, len(i.subGroups))
+
+	for name, sub := range i.subGroups {
+		subGroups = append(subGroups, sub)
+		delete(i.subGroups, name)
 	}
-  
-	if i.Closed { return } 
+
+	i.mutex.Unlock()
+
+	for _, sub := range subGroups {
+		sub.CancelAll()
+	}
+
 	i.Cancel()
 }
