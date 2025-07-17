@@ -218,8 +218,8 @@ func (a *AnimeUnity) GetEpisodes( animeModel models.Series, start uint, end uint
 /*
 	Download an episode using the API endpoint and save it to disk
 */
-func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (string, error) {
-  basePath := fmt.Sprintf("%s/%s", rootDir, a.anime.Slug)
+func (a AnimeUnity) DownloadEpisode(episode models.Episode, rootDir string) (string, error) {
+	basePath := fmt.Sprintf("%s/%s", rootDir, a.anime.Slug)
 	fileName := fmt.Sprintf("%d.mp4", episode.Number)
 	fullPath := basePath + "/" + fileName
 
@@ -234,135 +234,112 @@ func (a AnimeUnity) DownloadEpisode( episode models.Episode, rootDir string ) (s
 	if a.anime.ID == 0 {
 		return "", errors.New("anime id is 0")
 	}
-
 	if episode.ID == 0 {
 		return "", errors.New("episode id is 0")
 	}
-
 	if a.anime.Slug == "" {
 		return "", errors.New("anime slug is empty")
 	}
 
-  response, err := a.client.DoRequest("GET", fmt.Sprintf("/anime/%d-%s/%d", a.anime.ID, a.anime.Slug, episode.ID), "")
-  if err != nil {
-  	return "", err
- 	}
-
-	if string(response) == "null" || response == nil {
+	response, err := a.client.DoRequest("GET", fmt.Sprintf("/anime/%d-%s/%d", a.anime.ID, a.anime.Slug, episode.ID), "")
+	if err != nil {
+		return "", err
+	}
+	if response == nil || string(response) == "null" {
 		return "", errors.New("response is empty")
 	}
 
-	var error    error
-	var embedUrl string
-
-  doc, err := goquery.NewDocumentFromReader( bytes.NewReader(response) )
-  if err != nil {
+	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(response))
+	if err != nil {
 		return "", err
-  }
+	}
 
-	// find the embed url, that page conains the download url for the episode
-  doc.Find("video-player").Each(func(i int, s *goquery.Selection) {
-    url, exists := s.Attr("embed_url")
-    if exists {
-      embedUrl = url   
+	var embedUrl string
+	doc.Find("video-player").Each(func(i int, s *goquery.Selection) {
+		url, exists := s.Attr("embed_url")
+		if exists {
+			embedUrl = url
 		}
-  })
+	})
 
 	if embedUrl == "" {
-		error = errors.New("embed url not found")
-		return "", error
+		return "", errors.New("embed url not found")
 	}
 
-	var embedHtml []byte
-	{
-	  req, err := http.NewRequest("GET", embedUrl, nil)
-	  if err != nil {
-	  	return "", fmt.Errorf("error creating request: \n\t- %w", err) 
-	  }
-
-	  resp, err := http.DefaultClient.Do(req)
-	  if err != nil {
-	  	return "", fmt.Errorf("error doing request: \n\t- %w", err)
-	  }
-
-	  defer resp.Body.Close()
-
-		embedHtml, err = io.ReadAll(resp.Body)
-	  if err != nil {
-	  	return "", fmt.Errorf("error reading response: \n\t- %w", err)
-	  }
-	}
-
-	if string(embedHtml) == "null" || embedHtml == nil {
-		error = errors.New("embed response is empty")
-	 	return "", error
-	}
-
-	embedDoc, err := goquery.NewDocumentFromReader( bytes.NewReader(embedHtml) )
+	req, err := http.NewRequest("GET", embedUrl, nil)
 	if err != nil {
-	  return "", fmt.Errorf("error creating document: \n\t- %w", err)
+		return "", fmt.Errorf("error creating request: %w", err)
 	}
 
-	// find the download url and use it to download the episond and saavi it into a file
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error doing request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	embedHtml, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response: %w", err)
+	}
+	if embedHtml == nil || string(embedHtml) == "null" {
+		return "", errors.New("embed response is empty")
+	}
+
+	embedDoc, err := goquery.NewDocumentFromReader(bytes.NewReader(embedHtml))
+	if err != nil {
+		return "", fmt.Errorf("error creating document: %w", err)
+	}
+
+	// Estrazione URL di download
 	var downloadUrl string
 	embedDoc.Find("script").Each(func(i int, s *goquery.Selection) {
 		content := s.Text()
 		re := regexp.MustCompile(`window.downloadUrl\s*=\s*['"]([^"]+)['"]`)
-    match := re.FindStringSubmatch(content)
-
-    if len(match) > 1 {
-      downloadUrl = match[1]
-    }
+		match := re.FindStringSubmatch(content)
+		if len(match) > 1 {
+			downloadUrl = match[1]
+		}
 	})
 
 	if downloadUrl == "" {
-	  return "", errors.New("download url not found")
+		return "", errors.New("download url not found")
 	}
 
-	{
-    resp, err := http.Get(downloadUrl)
-    if err != nil {
-			return "", fmt.Errorf("error getting download url: \n\t- %w", err)
-    }
-    defer resp.Body.Close()
-
-    if resp.StatusCode != http.StatusOK {
-			return "", fmt.Errorf("invalid status code: %s", resp.Status)
-    }
-
-		err = os.MkdirAll(basePath, os.ModePerm)
-		if err != nil {
-			return "", fmt.Errorf("error creating directory: \n\t- %w", err)
-		}
-
-		downloadError := error
-
-		for {
-			outFile, err := os.Create(fullPath)
-			defer outFile.Close()
-
-			if err != nil {
-				downloadError = fmt.Errorf("error creating file: \n\t- %w", err)
-				break
-			}
-
-			_, err = io.Copy(outFile, resp.Body)
-			if err != nil {
-				downloadError = fmt.Errorf("error copying file: \n\t- %w", err)
-				break
-			}
-			
-			break
-		}
-
-		if downloadError != nil {
-			if errOs := os.Remove(fullPath); errOs != nil {
-				return "",  fmt.Errorf("error deleting file %s: \n\t- %s\n\t- %w", fullPath, errOs, downloadError)
-			}
-
-			return "", downloadError
-		}
+	resp, err = http.Get(downloadUrl)
+	if err != nil {
+		return "", fmt.Errorf("error getting download url: %w", err)
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("invalid status code: %s", resp.Status)
+	}
+
+	err = os.MkdirAll(basePath, os.ModePerm)
+	if err != nil {
+		return "", fmt.Errorf("error creating directory: %w", err)
+	}
+
+	var shouldCleanup = false
+	defer func() {
+		if shouldCleanup {
+			_ = os.Remove(fullPath)
+		}
+	}()
+
+	outFile, err := os.Create(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("error creating file: %w", err)
+	}
+	defer outFile.Close()
+	shouldCleanup = true
+
+	_, err = io.Copy(outFile, resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error copying file: %w", err)
+	}
+
+	shouldCleanup = false
 
 	return fullPath, nil
 }
