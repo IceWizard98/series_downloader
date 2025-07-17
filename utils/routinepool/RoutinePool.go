@@ -1,6 +1,7 @@
 package routinepool
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 var (
 	instance *iceRoutinePool.IceRoutinePool
 	once     sync.Once
+	Cancel   context.CancelFunc
 )
 const MAX_CONCURRENT_DOWNLOADS = "5"
 
@@ -37,7 +39,10 @@ func GetInstance() *iceRoutinePool.IceRoutinePool {
 			panic(err)
 		}
 
-		instance = iceRoutinePool.New( "main", nil, uint(poolSize), uint(poolSize) )
+		ctx, cancel := context.WithCancel(context.Background())
+		Cancel   = cancel
+		instance = iceRoutinePool.New( "main", ctx, uint(poolSize), uint(poolSize) )
 	})
 	return instance
 }
+
