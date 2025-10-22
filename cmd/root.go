@@ -175,6 +175,7 @@ var rootCmd = &cobra.Command{
 		endEpisode    := uint(selectedEpisode.Number) + uint(nextNEpisodes) + 1
 
 		var episodes []models.Episode
+
 		if toContinue {
 			selectedEpisode = models.Episode{
 				Number: selectedEpisode.Number + 1,
@@ -190,10 +191,10 @@ var rootCmd = &cobra.Command{
 				fmt.Println("Continue to watch locally")
 			}
 
-			if len(episodes) == 0 {
+			/* if len(episodes) == 0 {
 				fmt.Printf("No more episodes to watch\n")
 				os.Exit(0)
-			}
+			} */
 		} else {
 			var err error
 			episodes, err = animeUnityInstance.GetEpisodes(selectedSeries, 1, math.MaxUint)
